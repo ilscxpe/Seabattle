@@ -54,7 +54,7 @@
             content: '✕';
             color: white;
             font-weight: 800;
-            font-size: 1.05rem;
+            font-size: 0.9rem;
             position: absolute;
             inset: 0;
             display: flex;
@@ -72,8 +72,8 @@
         }
         .cell-miss::after {
             content: '';
-            width: 11px;
-            height: 11px;
+            width: 10px;
+            height: 10px;
             background-color: #1e293b;
             box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.16);
             border-radius: 9999px;
@@ -221,7 +221,7 @@
                     </div>
                     <h2 class="text-xl font-extrabold text-slate-900 mb-2">Битва против ИИ</h2>
                     <p class="text-xs text-slate-500 leading-relaxed mb-5">
-                        Сразитесь с умным алгоритмом на поле 8×8. Зарабатывайте опыт (XP), повышайте звание и копите монетки!
+                        Сразитесь с умным алгоритмом на классическом поле 10×10. Зарабатывайте опыт (XP), повышайте звание и копите монетки!
                     </p>
 
                     <!-- Выбор сложности AI -->
@@ -330,7 +330,7 @@
             <!-- Карточка-справка по правилам и званиям -->
             <div class="bg-white/90 border border-sky-100 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
                 <div>
-                    <div class="text-xs font-bold text-slate-800">Правила флота 8×8 и уровней</div>
+                    <div class="text-xs font-bold text-slate-800">Правила флота 10×10 и уровней</div>
                     <div class="text-[11px] text-slate-500">+25 🪙 за лвл • +100 🪙 на 10/20/30 ур.</div>
                 </div>
                 <button onclick="openRulesModal()" class="text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-xl transition">
@@ -406,7 +406,7 @@
         </section>
 
         <!-- ========================================== -->
-        <!-- ЭКРАН 2: РАССТАНОВКА КОРАБЛЕЙ (8x8 + 60с)  -->
+        <!-- ЭКРАН 2: РАССТАНОВКА КОРАБЛЕЙ (10x10 + 60с)-->
         <!-- ========================================== -->
         <section id="screen-setup" class="hidden flex-1 flex flex-col justify-between space-y-3">
             <!-- Верхняя панель расстановки с таймером на 1 минуту -->
@@ -424,28 +424,28 @@
                 <div class="text-xs font-bold text-sky-700 truncate max-w-[110px]" id="setup-mode-label">AI</div>
             </div>
 
-            <!-- Сетка 8x8 для расстановки (поддерживает тап и свайп пальцем) -->
-            <div class="bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center">
-                <div class="w-full flex justify-between items-center mb-2 px-1">
+            <!-- Сетка 10x10 для расстановки (поддерживает тап и свайп пальцем) -->
+            <div class="bg-white border border-sky-200/80 rounded-3xl p-3 shadow-sm flex flex-col items-center">
+                <div class="w-full flex justify-between items-center mb-1.5 px-1">
                     <span class="text-xs font-bold text-slate-700">Ваша эскадра (<span id="ships-counter" class="text-sky-600">0 / 10</span>)</span>
                     <button onclick="toggleOrientation()" id="btn-rotate" class="text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1 rounded-lg flex items-center gap-1 active:scale-95 transition">
                         🔄 <span id="orientation-text">Гориз.</span>
                     </button>
                 </div>
 
-                <!-- Буквы координат А-З -->
-                <div class="grid grid-cols-9 gap-1 w-full max-w-[320px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                <!-- Буквы координат А-К (10 столбцов + 1 для цифр) -->
+                <div class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
                     <div></div>
-                    <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                    <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div><div>И</div><div>К</div>
                 </div>
 
-                <!-- Поле 8x8 -->
-                <div id="setup-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100 touch-none">
+                <!-- Поле 10x10 -->
+                <div id="setup-grid-wrapper" class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100 touch-none">
                     <!-- Генерируется через JS -->
                 </div>
 
                 <!-- Панель выбора кораблей -->
-                <div class="w-full mt-3.5">
+                <div class="w-full mt-3">
                     <div class="text-[11px] font-medium text-slate-500 mb-1.5 text-center">Проведите пальцем по клеткам (свайп) или нажмите для установки:</div>
                     <div id="ship-dock" class="grid grid-cols-4 gap-1.5">
                         <!-- Генерируется через JS -->
@@ -453,11 +453,11 @@
                 </div>
 
                 <!-- Кнопки управления расстановкой -->
-                <div class="grid grid-cols-2 gap-2.5 w-full mt-4">
-                    <button onclick="autoPlacePlayerShips()" class="py-3 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-bold text-slate-700 active:scale-95 transition flex items-center justify-center gap-1.5">
+                <div class="grid grid-cols-2 gap-2.5 w-full mt-3.5">
+                    <button onclick="autoPlacePlayerShips()" class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-bold text-slate-700 active:scale-95 transition flex items-center justify-center gap-1.5">
                         <span>🎲 Случайно</span>
                     </button>
-                    <button onclick="clearPlayerBoard()" class="py-3 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-bold text-rose-600 active:scale-95 transition flex items-center justify-center gap-1.5">
+                    <button onclick="clearPlayerBoard()" class="py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-bold text-rose-600 active:scale-95 transition flex items-center justify-center gap-1.5">
                         <span>🗑️ Очистить</span>
                     </button>
                 </div>
@@ -469,7 +469,7 @@
         </section>
 
         <!-- ========================================== -->
-        <!-- ЭКРАН 3: ИГРОВОЙ ПРОЦЕСС (БОЙ С ПЛАВНОЙ СМЕНОЙ ПОЛЕЙ) -->
+        <!-- ЭКРАН 3: ИГРОВОЙ ПРОЦЕСС (БОЙ 10x10 С ПЛАВНОЙ СМЕНОЙ ПОЛЕЙ) -->
         <!-- ========================================== -->
         <section id="screen-battle" class="hidden flex-1 flex flex-col justify-between space-y-3">
             
@@ -494,23 +494,23 @@
             </div>
 
             <!-- КОНТЕЙНЕР ПЛАВНО ПЕРЕКЛЮЧАЮЩИХСЯ ПОЛЕЙ -->
-            <div class="relative flex-1 flex flex-col justify-center min-h-[385px]">
+            <div class="relative flex-1 flex flex-col justify-center min-h-[390px]">
 
-                <!-- 1. ЭКРАН АТАКИ (БОЛЬШОЕ ПОЛЕ ПРОТИВНИКА — ОТКРЫТ КОГДА ХОДИТЕ ВЫ) -->
-                <div id="stage-enemy-board" class="battle-stage battle-stage-visible bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center w-full">
-                    <div class="w-full flex justify-between items-center mb-2 px-1">
+                <!-- 1. ЭКРАН АТАКИ (БОЛЬШОЕ ПОЛЕ ПРОТИВНИКА 10x10 — ОТКРЫТ КОГДА ХОДИТЕ ВЫ) -->
+                <div id="stage-enemy-board" class="battle-stage battle-stage-visible bg-white border border-sky-200/80 rounded-3xl p-3 shadow-sm flex flex-col items-center w-full">
+                    <div class="w-full flex justify-between items-center mb-1.5 px-1">
                         <span class="text-xs font-extrabold text-rose-600 flex items-center gap-1.5">
                             🎯 Акватория противника
                         </span>
                         <span class="text-[11px] font-semibold text-slate-500">Кораблей врага: <b id="enemy-ships-left" class="text-slate-900">10</b></span>
                     </div>
 
-                    <div class="grid grid-cols-9 gap-1 w-full max-w-[330px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                    <div class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
                         <div></div>
-                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div><div>И</div><div>К</div>
                     </div>
 
-                    <div id="enemy-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[330px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                    <div id="enemy-grid-wrapper" class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
                         <!-- Генерируется через JS -->
                     </div>
 
@@ -520,21 +520,21 @@
                     </div>
                 </div>
 
-                <!-- 2. ЭКРАН ОБОРОНЫ (БОЛЬШОЕ ВАШЕ ПОЛЕ — ОТКРЫТ КОГДА СТРЕЛЯЕТ ПРОТИВНИК) -->
-                <div id="stage-player-board" class="battle-stage battle-stage-hidden bg-white border-2 border-amber-300 rounded-3xl p-3.5 shadow-md flex flex-col items-center w-full">
-                    <div class="w-full flex justify-between items-center mb-2 px-1">
+                <!-- 2. ЭКРАН ОБОРОНЫ (БОЛЬШОЕ ВАШЕ ПОЛЕ 10x10 — ОТКРЫТ КОГДА СТРЕЛЯЕТ ПРОТИВНИК) -->
+                <div id="stage-player-board" class="battle-stage battle-stage-hidden bg-white border-2 border-amber-300 rounded-3xl p-3 shadow-md flex flex-col items-center w-full">
+                    <div class="w-full flex justify-between items-center mb-1.5 px-1">
                         <span class="text-xs font-extrabold text-sky-700 flex items-center gap-1.5">
                             🛡️ Ваши палубы (Оборона)
                         </span>
                         <span class="text-[11px] font-semibold text-slate-500">Ваших кораблей: <b id="player-ships-left" class="text-emerald-600">10</b></span>
                     </div>
 
-                    <div class="grid grid-cols-9 gap-1 w-full max-w-[330px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                    <div class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
                         <div></div>
-                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div><div>И</div><div>К</div>
                     </div>
 
-                    <div id="player-battle-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[330px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                    <div id="player-battle-grid-wrapper" class="grid grid-cols-11 gap-0.5 w-full max-w-[335px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
                         <!-- Генерируется через JS -->
                     </div>
 
@@ -600,7 +600,7 @@
                 <button onclick="closeModal('modal-rules')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold">✕</button>
             </div>
             <div class="space-y-2.5 text-xs text-slate-600 leading-relaxed">
-                <p><b class="text-slate-900">1. Игровое поле 8×8:</b> Координаты от А до З и от 1 до 8.</p>
+                <p><b class="text-slate-900">1. Игровое поле 10×10:</b> Координаты от А до К и от 1 до 10.</p>
                 <p><b class="text-slate-900">2. Состав эскадры (10 кораблей):</b> 1 четырехпалубный, 2 трехпалубных, 3 двухпалубных и 4 однопалубных.</p>
                 <p><b class="text-slate-900">3. Таймеры:</b> 1 минута на расстановку кораблей и 15 секунд на каждый выстрел в бою.</p>
                 <p><b class="text-slate-900">4. Экономика и монетки 🪙:</b> За каждый новый уровень начисляется <b>+25 монеток</b>, а за юбилейные 10, 20, 30... уровни — <b>+100 монеток</b>!</p>
@@ -710,7 +710,7 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'seabattle-8x8-tg';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'seabattle-10x10-tg';
         // Вставьте сюда ваш объект firebaseConfig из настроек Firebase Console
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
@@ -720,7 +720,7 @@
         let roomUnsubscribe = null;
         let matchmakingUnsubscribe = null;
 
-        const LOCAL_STORAGE_KEY = 'seabattle_8x8_profile_v2';
+        const LOCAL_STORAGE_KEY = 'seabattle_10x10_profile_v1';
 
         function loadLocalFallback() {
             try {
@@ -835,7 +835,8 @@
             } catch (e) {}
         }
 
-        const GRID_SIZE = 8;
+        const GRID_SIZE = 10;
+        const COL_LETTERS = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'К'];
         const SETUP_TIME_SECONDS = 60;
         const TURN_TIME_SECONDS = 15;
         const SHOT_DELAY_MS = 500; // 0.5 секунды задержки после выстрела
@@ -1125,7 +1126,7 @@
         function inviteViaTelegram() {
             triggerHaptic('medium');
             const roomPart = state.roomCode ? ` Код комнаты: ${state.roomCode}` : ` Мой код друга: ${state.user.code}`;
-            const shareText = `⚓ Вызываю тебя на дуэль в «Морской Бой 8×8»!${roomPart}`;
+            const shareText = `⚓ Вызываю тебя на дуэль в «Морской Бой 10×10»!${roomPart}`;
             if (tg && tg.openTelegramLink) {
                 const url = `https://t.me/share/url?url=${encodeURIComponent('https://t.me')}&text=${encodeURIComponent(shareText)}`;
                 tg.openTelegramLink(url);
@@ -1436,7 +1437,7 @@
         }
 
         // ==========================================
-        // 4. ЛОГИКА ПОЛЯ 8x8, СВАЙП-РАССТАНОВКИ И ТАЙМЕРА 1 МИНУТА
+        // 4. ЛОГИКА ПОЛЯ 10x10, СВАЙП-РАССТАНОВКИ И ТАЙМЕРА 1 МИНУТА
         // ==========================================
         function createEmptyBoard() {
             return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
@@ -1588,7 +1589,7 @@
                     for (let c = 0; c < group.count; c++) {
                         let placed = false;
                         let attempts = 0;
-                        while (!placed && attempts < 150) {
+                        while (!placed && attempts < 200) {
                             const isHoriz = Math.random() < 0.5;
                             const r = Math.floor(Math.random() * GRID_SIZE);
                             const col = Math.floor(Math.random() * GRID_SIZE);
@@ -1633,7 +1634,7 @@
                     const cell = document.createElement('div');
                     const hasShip = state.playerBoard[r][c] !== null;
                     
-                    cell.className = `grid-cell rounded-md border cursor-pointer ${
+                    cell.className = `grid-cell rounded-[4px] border cursor-pointer ${
                         hasShip ? 'cell-ship' : 'bg-white border-sky-200/90 hover:border-sky-400'
                     }`;
                     cell.dataset.r = r;
@@ -2070,7 +2071,6 @@
             renderEnemyGrid();
             renderPlayerBattleGrid();
 
-            // Если ход сменился, даём 0.5 секунды задержки чтобы увидеть результат последнего выстрела
             if (!isInitial && prevTurn !== newTurn) {
                 state.isAnimatingShot = true;
                 setTimeout(() => {
@@ -2135,7 +2135,7 @@
                     const cell = document.createElement('div');
                     const status = state.enemyFog[r][c];
                     
-                    let classes = 'grid-cell rounded-md border ';
+                    let classes = 'grid-cell rounded-[4px] border ';
                     if (status === null) {
                         classes += 'bg-white border-sky-200/90 hover:border-rose-400 cursor-pointer shadow-2xs';
                     } else if (status === 'miss') {
@@ -2171,7 +2171,7 @@
                     const shipCell = state.playerBoard[r][c];
                     const shotStatus = state.playerShotsLog[r][c];
 
-                    let classes = 'grid-cell rounded-md border ';
+                    let classes = 'grid-cell rounded-[4px] border ';
                     if (shotStatus === 'hit') {
                         const ship = shipCell ? state.playerShips.find(s => s.id === shipCell.shipId) : null;
                         classes += (ship && ship.sunk) ? 'cell-hit cell-sunk' : 'cell-hit';
@@ -2196,8 +2196,7 @@
                 state.isAnimatingShot = true;
                 const targetCell = state.enemyBoard[r][c];
                 const isHit = Boolean(targetCell);
-                const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
-                const coordStr = `${letters[c]}${r + 1}`;
+                const coordStr = `${COL_LETTERS[c]}${r + 1}`;
 
                 triggerHaptic(isHit ? 'heavy' : 'light');
                 document.getElementById('last-action-log').textContent = isHit ? `${coordStr}: Попадание!` : `${coordStr}: Мимо`;
@@ -2222,8 +2221,7 @@
 
             state.playerShots++;
             const targetCell = state.enemyBoard[r][c];
-            const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
-            const coordStr = `${letters[c]}${r + 1}`;
+            const coordStr = `${COL_LETTERS[c]}${r + 1}`;
 
             if (targetCell) {
                 state.playerHits++;
@@ -2251,7 +2249,6 @@
                     endGame(true);
                 }
             } else {
-                // Блокируем повторные клики, показываем тёмную жирную точку промаха и ждём 0.5 секунды
                 state.isAnimatingShot = true;
                 state.enemyFog[r][c] = 'miss';
                 document.getElementById('last-action-log').textContent = `${coordStr}: Мимо — ход переходит к противнику`;
@@ -2316,8 +2313,7 @@
                 c = choice.c;
             }
 
-            const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
-            const coordStr = `${letters[c]}${r + 1}`;
+            const coordStr = `${COL_LETTERS[c]}${r + 1}`;
             const playerCell = state.playerBoard[r][c];
 
             if (playerCell) {
@@ -2364,7 +2360,6 @@
                     setTimeout(executeOpponentTurn, 950);
                 }
             } else {
-                // Показываем жирную точку промаха врага на ваших палубах и даём 0.5 секунды задержки перед сменой экрана
                 state.playerShotsLog[r][c] = 'miss';
                 document.getElementById('last-action-log').textContent = `${coordStr}: Противник промахнулся!`;
                 renderPlayerBattleGrid();
