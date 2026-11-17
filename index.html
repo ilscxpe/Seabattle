@@ -26,7 +26,7 @@
 
         .grid-cell {
             aspect-ratio: 1 / 1;
-            transition: transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+            transition: transform 0.12s ease, background-color 0.25s ease, border-color 0.25s ease;
         }
         .grid-cell:active {
             transform: scale(0.92);
@@ -36,6 +36,12 @@
             0% { transform: scale(0.75); }
             50% { transform: scale(1.1); }
             100% { transform: scale(1); }
+        }
+
+        @keyframes dot-pop {
+            0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.4; }
+            70% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
 
         .cell-hit {
@@ -66,14 +72,16 @@
         }
         .cell-miss::after {
             content: '';
-            width: 7px;
-            height: 7px;
-            background-color: #64748b;
+            width: 11px;
+            height: 11px;
+            background-color: #1e293b;
+            box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.16);
             border-radius: 9999px;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            animation: dot-pop 0.22s ease-out forwards;
         }
 
         .cell-ship {
@@ -90,6 +98,25 @@
         .cell-preview-invalid {
             background-color: rgba(244, 63, 94, 0.3) !important;
             border-color: #f43f5e !important;
+        }
+
+        /* Ультра-плавные переходы между полями боя */
+        .battle-stage {
+            transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: opacity, transform;
+        }
+        .battle-stage-hidden {
+            opacity: 0;
+            transform: scale(0.92) translateY(14px);
+            pointer-events: none;
+            position: absolute;
+            inset: 0;
+        }
+        .battle-stage-visible {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+            position: relative;
         }
 
         ::-webkit-scrollbar {
@@ -147,7 +174,7 @@
                     <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
-                    <span id="friends-badge" class="bg-sky-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">2</span>
+                    <span id="friends-badge" class="bg-sky-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">0</span>
                 </button>
             </div>
         </div>
@@ -169,11 +196,11 @@
         <!-- ========================================== -->
         <section id="screen-lobby" class="flex-1 flex flex-col justify-between space-y-4">
             
-            <!-- Навигационные вкладки -->
+            <!-- Навигационные вкладки (AI, Онлайн, С друзьями) -->
             <div class="bg-white p-1.5 rounded-2xl border border-sky-200/80 shadow-xs grid grid-cols-3 gap-1">
                 <button onclick="switchTab('ai')" id="tab-ai" class="tab-btn py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 bg-sky-600 text-white shadow-md shadow-sky-600/20">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                    <span>С AI</span>
+                    <span>AI</span>
                 </button>
                 <button onclick="switchTab('online')" id="tab-online" class="tab-btn py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-800">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
@@ -197,7 +224,7 @@
                         Сразитесь с умным алгоритмом на поле 8×8. Зарабатывайте опыт (XP), повышайте звание и копите монетки!
                     </p>
 
-                    <!-- Выбор сложности AI (вертикально друг под другом) -->
+                    <!-- Выбор сложности AI -->
                     <div class="space-y-2 mb-6">
                         <label class="text-xs font-bold text-slate-700 block">Выберите уровень сложности:</label>
                         <div class="grid grid-cols-1 gap-2">
@@ -264,14 +291,14 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Приватная комната</span>
-                        <button onclick="openFriendsModal()" class="text-xs text-sky-600 underline font-bold">+ Добавить по коду</button>
+                        <button onclick="openFriendsModal()" class="text-xs text-sky-600 underline font-bold">+ Добавить друга по коду</button>
                     </div>
                     <h2 class="text-xl font-extrabold text-slate-900 mb-2">Игра с друзьями</h2>
                     <p class="text-xs text-slate-500 leading-relaxed mb-3">
-                        Создайте комнату и отправьте код другу, либо введите код комнаты друга для подключения в реальном времени.
+                        Создайте лобби с 5-значным кодом, дождитесь входа друга и начните совместную битву.
                     </p>
 
-                    <!-- Создание / Вход в комнату по коду -->
+                    <!-- Создание / Вход в комнату по 5-значному коду -->
                     <div class="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 mb-3 space-y-2.5">
                         <div class="flex items-center justify-between gap-2">
                             <button onclick="createPrivateRoom()" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-xs shadow-xs active:scale-95 transition">
@@ -279,7 +306,7 @@
                             </button>
                         </div>
                         <div class="flex gap-1.5">
-                            <input type="text" id="input-room-code" placeholder="Код комнаты (напр. 4821)" maxlength="10" class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 uppercase">
+                            <input type="tel" inputmode="numeric" id="input-room-code" placeholder="5-значный код (напр. 48219)" maxlength="5" class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500">
                             <button onclick="joinPrivateRoom()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs active:scale-95 transition">
                                 Войти
                             </button>
@@ -313,6 +340,72 @@
         </section>
 
         <!-- ========================================== -->
+        <!-- ЭКРАН 1.5: ЛОББИ ПРИВАТНОЙ КОМНАТЫ         -->
+        <!-- ========================================== -->
+        <section id="screen-room-lobby" class="hidden flex-1 flex flex-col justify-between space-y-4">
+            <div class="flex items-center justify-between">
+                <button onclick="leaveRoomLobby()" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 py-1.5 px-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    ← Выйти из лобби
+                </button>
+                <span class="text-xs font-extrabold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+                    Приватное лобби
+                </span>
+            </div>
+
+            <div class="bg-white border border-sky-100 rounded-3xl p-5 shadow-sm space-y-5 flex-1 flex flex-col justify-between">
+                <div class="text-center space-y-2">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-400">5-значный код комнаты</div>
+                    <div class="bg-sky-50 border-2 border-dashed border-sky-300 rounded-2xl py-4 px-3 flex flex-col items-center justify-center gap-2">
+                        <span id="lobby-room-code-big" class="font-mono text-3xl font-extrabold tracking-[0.25em] text-sky-700 pl-2">00000</span>
+                        <div class="flex gap-2">
+                            <button onclick="copyActiveRoomCode()" class="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold active:scale-95 transition">
+                                📋 Скопировать код
+                            </button>
+                            <button onclick="inviteViaTelegram()" class="px-3.5 py-1.5 rounded-xl bg-[#2AABEE] hover:bg-[#229ED9] text-white text-xs font-bold active:scale-95 transition">
+                                ✈️ В Telegram
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Участники лобби -->
+                <div class="space-y-2.5">
+                    <div class="text-xs font-extrabold text-slate-700">Игроки в лобби:</div>
+                    
+                    <!-- Игрок 1 (Создатель) -->
+                    <div class="flex items-center justify-between bg-sky-50/70 border border-sky-200 p-3 rounded-2xl">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-full bg-sky-600 text-white font-extrabold flex items-center justify-center text-sm" id="lobby-host-avatar">К</div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-900" id="lobby-host-name">Капитан</div>
+                                <div class="text-[10px] font-semibold text-sky-700">Организатор лобби</div>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">В лобби</span>
+                    </div>
+
+                    <!-- Игрок 2 (Друг) -->
+                    <div id="lobby-guest-card" class="flex items-center justify-between bg-slate-50 border border-slate-200 border-dashed p-3 rounded-2xl transition-all">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-full bg-slate-200 text-slate-500 font-extrabold flex items-center justify-center text-sm" id="lobby-guest-avatar">?</div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-600" id="lobby-guest-name">Ожидание друга...</div>
+                                <div class="text-[10px] font-medium text-slate-400" id="lobby-guest-sub">Введите код на втором устройстве</div>
+                            </div>
+                        </div>
+                        <div id="lobby-guest-status">
+                            <span class="inline-block w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-lobby-start-game" onclick="hostStartRoomGame()" disabled class="w-full py-4 rounded-2xl bg-slate-200 text-slate-400 font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-not-allowed">
+                    <span>⏳ Ожидаем подключения друга...</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
         <!-- ЭКРАН 2: РАССТАНОВКА КОРАБЛЕЙ (8x8 + 60с)  -->
         <!-- ========================================== -->
         <section id="screen-setup" class="hidden flex-1 flex flex-col justify-between space-y-3">
@@ -328,21 +421,10 @@
                     <span id="setup-timer-display">01:00</span>
                 </div>
 
-                <div class="text-xs font-bold text-sky-700 truncate max-w-[110px]" id="setup-mode-label">Против AI</div>
+                <div class="text-xs font-bold text-sky-700 truncate max-w-[110px]" id="setup-mode-label">AI</div>
             </div>
 
-            <!-- Баннер кода комнаты (для мультиплеера) -->
-            <div id="multiplayer-setup-banner" class="hidden bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between">
-                <div>
-                    <div class="text-[11px] font-semibold text-indigo-700">Код комнаты (передайте другу):</div>
-                    <div class="font-mono text-base font-extrabold text-indigo-950" id="active-room-code-display">----</div>
-                </div>
-                <button onclick="copyActiveRoomCode()" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-xs active:scale-95 transition">
-                    Копировать
-                </button>
-            </div>
-
-            <!-- Сетка 8x8 для расстановки -->
+            <!-- Сетка 8x8 для расстановки (поддерживает тап и свайп пальцем) -->
             <div class="bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center">
                 <div class="w-full flex justify-between items-center mb-2 px-1">
                     <span class="text-xs font-bold text-slate-700">Ваша эскадра (<span id="ships-counter" class="text-sky-600">0 / 10</span>)</span>
@@ -358,13 +440,13 @@
                 </div>
 
                 <!-- Поле 8x8 -->
-                <div id="setup-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                <div id="setup-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100 touch-none">
                     <!-- Генерируется через JS -->
                 </div>
 
                 <!-- Панель выбора кораблей -->
                 <div class="w-full mt-3.5">
-                    <div class="text-[11px] font-medium text-slate-500 mb-1.5 text-center">Выберите тип корабля и нажмите на клетку поля:</div>
+                    <div class="text-[11px] font-medium text-slate-500 mb-1.5 text-center">Проведите пальцем по клеткам (свайп) или нажмите для установки:</div>
                     <div id="ship-dock" class="grid grid-cols-4 gap-1.5">
                         <!-- Генерируется через JS -->
                     </div>
@@ -387,61 +469,80 @@
         </section>
 
         <!-- ========================================== -->
-        <!-- ЭКРАН 3: ИГРОВОЙ ПРОЦЕСС (БОЙ)             -->
+        <!-- ЭКРАН 3: ИГРОВОЙ ПРОЦЕСС (БОЙ С ПЛАВНОЙ СМЕНОЙ ПОЛЕЙ) -->
         <!-- ========================================== -->
         <section id="screen-battle" class="hidden flex-1 flex flex-col justify-between space-y-3">
             
-            <!-- Статус хода -->
-            <div class="bg-white border border-sky-200/80 rounded-2xl p-3 flex items-center justify-between shadow-xs">
-                <div class="flex items-center gap-2.5">
-                    <div id="turn-indicator" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
-                    <div>
-                        <div id="turn-text" class="text-sm font-extrabold text-emerald-600">Ваш ход!</div>
-                        <div id="last-action-log" class="text-[11px] font-medium text-slate-500">Выберите клетку на поле противника</div>
+            <!-- Статус хода + Таймер 15 секунд на ход -->
+            <div class="bg-white border border-sky-200/80 rounded-2xl p-3 flex items-center justify-between shadow-xs gap-2">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <div id="turn-indicator" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping shrink-0"></div>
+                    <div class="min-w-0">
+                        <div id="turn-text" class="text-sm font-extrabold text-emerald-600 truncate">Ваш ход!</div>
+                        <div id="last-action-log" class="text-[11px] font-medium text-slate-500 truncate">Выберите клетку на поле противника</div>
                     </div>
                 </div>
-                <button onclick="confirmSurrender()" class="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-xl transition">
+
+                <!-- Таймер 15 сек -->
+                <div id="turn-timer-badge" class="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 font-mono text-xs font-extrabold text-slate-700 shrink-0">
+                    ⏱️ <span id="turn-timer-display">00:15</span>
+                </div>
+
+                <button onclick="confirmSurrender()" class="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-xl transition shrink-0">
                     Сдаться
                 </button>
             </div>
 
-            <!-- Основное поле атаки (Поле противника 8x8) -->
-            <div class="bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center">
-                <div class="w-full flex justify-between items-center mb-2 px-1">
-                    <span class="text-xs font-extrabold text-rose-600 flex items-center gap-1.5">
-                        🎯 Акватория противника
-                    </span>
-                    <span class="text-[11px] font-semibold text-slate-500">Кораблей: <b id="enemy-ships-left" class="text-slate-900">10</b></span>
-                </div>
+            <!-- КОНТЕЙНЕР ПЛАВНО ПЕРЕКЛЮЧАЮЩИХСЯ ПОЛЕЙ -->
+            <div class="relative flex-1 flex flex-col justify-center min-h-[385px]">
 
-                <!-- Буквы координат А-З -->
-                <div class="grid grid-cols-9 gap-1 w-full max-w-[320px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
-                    <div></div>
-                    <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
-                </div>
+                <!-- 1. ЭКРАН АТАКИ (БОЛЬШОЕ ПОЛЕ ПРОТИВНИКА — ОТКРЫТ КОГДА ХОДИТЕ ВЫ) -->
+                <div id="stage-enemy-board" class="battle-stage battle-stage-visible bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center w-full">
+                    <div class="w-full flex justify-between items-center mb-2 px-1">
+                        <span class="text-xs font-extrabold text-rose-600 flex items-center gap-1.5">
+                            🎯 Акватория противника
+                        </span>
+                        <span class="text-[11px] font-semibold text-slate-500">Кораблей врага: <b id="enemy-ships-left" class="text-slate-900">10</b></span>
+                    </div>
 
-                <div id="enemy-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
-                    <!-- Генерируется через JS -->
-                </div>
-            </div>
+                    <div class="grid grid-cols-9 gap-1 w-full max-w-[330px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                        <div></div>
+                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                    </div>
 
-            <!-- Мини-радар игрока (Ваш флот) -->
-            <div class="bg-white border border-sky-200/80 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs">
-                <div class="flex-1">
-                    <div class="text-xs font-extrabold text-sky-700 mb-1">🛡️ Ваша эскадра</div>
-                    <p class="text-[11px] text-slate-500 leading-snug mb-2">
-                        При попадании вы получаете дополнительный выстрел.
-                    </p>
-                    <div class="flex gap-3 text-[11px]">
-                        <span class="text-slate-500">У вас: <b id="player-ships-left" class="text-emerald-600">10</b></span>
-                        <span class="text-slate-500 truncate max-w-[125px]"><span id="enemy-name-label">Противник:</span> <b class="text-rose-600">в бою</b></span>
+                    <div id="enemy-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[330px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                        <!-- Генерируется через JS -->
+                    </div>
+
+                    <div class="w-full flex justify-between items-center mt-2.5 px-1 text-[11px] text-slate-500">
+                        <span>Ваших кораблей: <b id="player-ships-left-hint" class="text-emerald-600">10</b></span>
+                        <span class="font-semibold text-sky-600">Попадание даёт доп. выстрел</span>
                     </div>
                 </div>
 
-                <!-- Мини-сетка 8x8 игрока -->
-                <div id="mini-player-grid" class="grid grid-cols-8 gap-0.5 w-24 h-24 bg-sky-50 p-1.5 rounded-xl border border-sky-200 shrink-0">
-                    <!-- Генерируется через JS -->
+                <!-- 2. ЭКРАН ОБОРОНЫ (БОЛЬШОЕ ВАШЕ ПОЛЕ — ОТКРЫТ КОГДА СТРЕЛЯЕТ ПРОТИВНИК) -->
+                <div id="stage-player-board" class="battle-stage battle-stage-hidden bg-white border-2 border-amber-300 rounded-3xl p-3.5 shadow-md flex flex-col items-center w-full">
+                    <div class="w-full flex justify-between items-center mb-2 px-1">
+                        <span class="text-xs font-extrabold text-sky-700 flex items-center gap-1.5">
+                            🛡️ Ваши палубы (Оборона)
+                        </span>
+                        <span class="text-[11px] font-semibold text-slate-500">Ваших кораблей: <b id="player-ships-left" class="text-emerald-600">10</b></span>
+                    </div>
+
+                    <div class="grid grid-cols-9 gap-1 w-full max-w-[330px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                        <div></div>
+                        <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                    </div>
+
+                    <div id="player-battle-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[330px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                        <!-- Генерируется через JS -->
+                    </div>
+
+                    <div class="w-full flex justify-between items-center mt-2.5 px-1 text-[11px] text-amber-700 font-semibold">
+                        <span>⚠️ <span id="enemy-name-label">Противник</span> ведёт огонь по вашим палубам</span>
+                    </div>
                 </div>
+
             </div>
         </section>
 
@@ -481,7 +582,7 @@
 
             <!-- Список добавленных друзей -->
             <div>
-                <div class="text-xs font-bold text-slate-500 mb-2">Ваши друзья (<span id="modal-friends-count">2</span>):</div>
+                <div class="text-xs font-bold text-slate-500 mb-2">Ваши друзья (<span id="modal-friends-count">0</span>):</div>
                 <div id="modal-friends-list" class="space-y-2 max-h-44 overflow-y-auto pr-1">
                     <!-- Генерируется через JS -->
                 </div>
@@ -501,7 +602,7 @@
             <div class="space-y-2.5 text-xs text-slate-600 leading-relaxed">
                 <p><b class="text-slate-900">1. Игровое поле 8×8:</b> Координаты от А до З и от 1 до 8.</p>
                 <p><b class="text-slate-900">2. Состав эскадры (10 кораблей):</b> 1 четырехпалубный, 2 трехпалубных, 3 двухпалубных и 4 однопалубных.</p>
-                <p><b class="text-slate-900">3. Таймер подготовки:</b> У вас есть ровно <b>1 минута (60 сек.)</b>. Если время истечёт, флот достроится автоматически.</p>
+                <p><b class="text-slate-900">3. Таймеры:</b> 1 минута на расстановку кораблей и 15 секунд на каждый выстрел в бою.</p>
                 <p><b class="text-slate-900">4. Экономика и монетки 🪙:</b> За каждый новый уровень начисляется <b>+25 монеток</b>, а за юбилейные 10, 20, 30... уровни — <b>+100 монеток</b>!</p>
                 
                 <!-- Таблица званий -->
@@ -533,7 +634,7 @@
         <div class="bg-white border border-slate-200 w-full max-w-xs rounded-3xl p-5 shadow-2xl text-center space-y-4">
             <div class="text-3xl">🏳️</div>
             <h3 class="text-base font-extrabold text-slate-900">Покинуть сражение?</h3>
-            <p class="text-xs text-slate-500">Вам будет засчитано поражение, но вы всё равно получите утешительный опыт (XP).</p>
+            <p class="text-xs text-slate-500">Вам будет засчитано поражение, но вы получите небольшой опыт (XP) за потопленные корабли.</p>
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="closeModal('modal-surrender')" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">Отмена</button>
                 <button onclick="surrenderGame()" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white">Сдаться</button>
@@ -610,7 +711,7 @@
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'seabattle-8x8-tg';
-        // Если вы захотите подключить свой личный Firebase проект, вставьте сюда ваш объект firebaseConfig
+        // Вставьте сюда ваш объект firebaseConfig из настроек Firebase Console
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
         let db = null;
@@ -619,7 +720,41 @@
         let roomUnsubscribe = null;
         let matchmakingUnsubscribe = null;
 
+        const LOCAL_STORAGE_KEY = 'seabattle_8x8_profile_v2';
+
+        function loadLocalFallback() {
+            try {
+                const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                state.user.level = data.level || 1;
+                state.user.xp = data.xp || 0;
+                state.user.coins = data.coins || 0;
+                state.user.wins = data.wins || 0;
+                if (data.code) state.user.code = data.code;
+                if (Array.isArray(data.friends)) state.friends = data.friends;
+            } catch (e) {}
+        }
+
+        function saveLocalFallback() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+                    level: state.user.level,
+                    xp: state.user.xp,
+                    coins: state.user.coins,
+                    wins: state.user.wins,
+                    code: state.user.code,
+                    friends: state.friends
+                }));
+            } catch (e) {}
+        }
+
         async function initCloudServices() {
+            loadLocalFallback();
+            document.getElementById('my-friend-code').textContent = state.user.code;
+            updateHeaderStats();
+            renderFriendsLists();
+
             if (!firebaseConfig) {
                 document.getElementById('online-status-label').textContent = 'Локальный режим';
                 return;
@@ -641,7 +776,7 @@
                 await loadPlayerProgress();
                 document.getElementById('online-status-label').textContent = 'Облако подключено';
             } catch (err) {
-                document.getElementById('online-status-label').textContent = 'Офлайн-режим';
+                document.getElementById('online-status-label').textContent = 'Локальный режим';
             }
         }
 
@@ -659,6 +794,7 @@
                     if (data.code) state.user.code = data.code;
                     if (Array.isArray(data.friends)) state.friends = data.friends;
 
+                    saveLocalFallback();
                     document.getElementById('my-friend-code').textContent = state.user.code;
                     updateHeaderStats();
                     renderFriendsLists();
@@ -669,6 +805,7 @@
         }
 
         async function savePlayerProgress() {
+            saveLocalFallback();
             if (!db || !currentUserId) return;
             try {
                 const profileRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'profile', 'stats');
@@ -700,6 +837,8 @@
 
         const GRID_SIZE = 8;
         const SETUP_TIME_SECONDS = 60;
+        const TURN_TIME_SECONDS = 15;
+        const SHOT_DELAY_MS = 500; // 0.5 секунды задержки после выстрела
 
         const FLEET_CONFIG = [
             { size: 4, count: 1, name: 'Линкор (4)' },
@@ -746,10 +885,7 @@
                 xp: 0,
                 coins: 0
             },
-            friends: [
-                { name: 'Алексей Морской', code: 'SB-4412-TG', online: true },
-                { name: 'Елена Шторм', code: 'SB-7890-TG', online: false }
-            ],
+            friends: [],
             currentTab: 'ai',
             gameMode: 'ai',
             opponentName: 'ИИ Лейтенант',
@@ -762,8 +898,15 @@
 
             setupTimerInterval: null,
             setupSecondsLeft: SETUP_TIME_SECONDS,
+            turnTimerInterval: null,
+            turnSecondsLeft: TURN_TIME_SECONDS,
+
             selectedShipSize: 4,
             isHorizontal: true,
+            swipeStartCell: null,
+            swipeCurrentCell: null,
+            isSwipingGrid: false,
+
             playerBoard: [],
             playerShips: [],
 
@@ -772,6 +915,7 @@
             enemyFog: [],
             playerShotsLog: [],
             isPlayerTurn: true,
+            isAnimatingShot: false,
             isGameOver: false,
             playerShots: 0,
             playerHits: 0,
@@ -781,9 +925,6 @@
         window.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('user-name').textContent = state.user.name;
             document.getElementById('user-avatar').textContent = state.user.name.charAt(0).toUpperCase();
-            document.getElementById('my-friend-code').textContent = state.user.code;
-            updateHeaderStats();
-            renderFriendsLists();
             await initCloudServices();
 
             const startParam = tg?.initDataUnsafe?.start_param;
@@ -927,15 +1068,13 @@
                 return;
             }
 
-            const names = ['Дмитрий Флот', 'Анна Волна', 'Максим Корсар', 'Игорь Шкипер'];
-            const randomName = names[Math.floor(Math.random() * names.length)];
-            
-            state.friends.unshift({ name: randomName, code: code, online: true });
+            const friendLabel = 'Капитан ' + code.replace('SB-', '').replace('-TG', '');
+            state.friends.unshift({ name: friendLabel, code: code, online: true });
             input.value = '';
             renderFriendsLists();
             await savePlayerProgress();
             triggerHaptic('success');
-            showToast(`${randomName} добавлен в друзья!`, '✅');
+            showToast(`${friendLabel} добавлен в друзья!`, '✅');
         }
 
         function renderFriendsLists() {
@@ -947,6 +1086,13 @@
             const lobbyList = document.getElementById('lobby-friends-list');
             modalList.innerHTML = '';
             lobbyList.innerHTML = '';
+
+            if (count === 0) {
+                const emptyMsg = '<div class="text-center py-3 text-[11px] text-slate-400">Список друзей пуст. Добавьте друга по уникальному коду!</div>';
+                modalList.innerHTML = emptyMsg;
+                lobbyList.innerHTML = emptyMsg;
+                return;
+            }
 
             state.friends.forEach(friend => {
                 const item = document.createElement('div');
@@ -963,7 +1109,7 @@
                         </div>
                     </div>
                     <button onclick="challengeFriend('${friend.name}')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold active:scale-95 transition">
-                        Создать бой
+                        Создать лобби
                     </button>
                 `;
                 modalList.appendChild(item);
@@ -984,17 +1130,21 @@
                 const url = `https://t.me/share/url?url=${encodeURIComponent('https://t.me')}&text=${encodeURIComponent(shareText)}`;
                 tg.openTelegramLink(url);
             } else {
-                copyFriendCode();
-                showToast('Приглашение скопировано! Отправьте другу в чат', '✈️');
+                copyActiveRoomCode();
+                showToast('Код комнаты скопирован! Отправьте другу в чат', '✈️');
             }
         }
 
         // ==========================================
-        // 3.5 РЕАЛЬНЫЙ МУЛЬТИПЛЕЕР (КОМНАТЫ И МАТЧМЕЙКИНГ В FIRESTORE)
+        // 3.5 ЛОББИ ПРИВАТНОЙ КОМНАТЫ (5-ЗНАЧНЫЙ КОД) И МАТЧМЕЙКИНГ
         // ==========================================
         function cleanupRoomListeners() {
             if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
             if (matchmakingUnsubscribe) { matchmakingUnsubscribe(); matchmakingUnsubscribe = null; }
+        }
+
+        function generateFiveDigitCode() {
+            return String(Math.floor(10000 + Math.random() * 90000));
         }
 
         async function findOnlineMatch() {
@@ -1026,14 +1176,14 @@
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matchmaking', opponentDoc.id));
                     } catch (e) {}
 
-                    await joinRoomByCode(oppData.roomCode, 'online');
+                    await joinRoomByCode(oppData.roomCode, 'online', false);
                 }
             }, (err) => {});
 
             setTimeout(async () => {
                 if (joinedExisting) return;
-                const code = String(Math.floor(1000 + Math.random() * 9000));
-                await createRoomInCloud(code, 'online');
+                const code = generateFiveDigitCode();
+                await createRoomInCloud(code, 'online', false);
 
                 const myQueueRef = doc(db, 'artifacts', appId, 'public', 'data', 'matchmaking', currentUserId);
                 await setDoc(myQueueRef, {
@@ -1060,45 +1210,135 @@
         }
 
         async function createPrivateRoom(friendName = 'Друг') {
-            if (!db || !currentUserId) {
-                state.opponentName = friendName;
-                startSetup('friend');
-                return;
-            }
-            const code = String(Math.floor(1000 + Math.random() * 9000));
+            triggerHaptic('medium');
+            const code = generateFiveDigitCode();
+            state.roomCode = code;
+            state.playerRole = 'host';
             state.opponentName = friendName;
-            await createRoomInCloud(code, 'friend');
-            showToast(`Комната ${code} создана! Сообщите код другу`, '🔑');
+            state.isFleetSubmitted = false;
+
+            openRoomLobbyUI(code, true, null);
+
+            if (db && currentUserId) {
+                await createRoomInCloud(code, 'friend', true);
+            } else {
+                showToast(`Лобби ${code} открыто (локальный режим)`, '🔑');
+            }
         }
 
         async function joinPrivateRoom() {
-            const raw = document.getElementById('input-room-code').value.trim().toUpperCase();
-            if (!raw || raw.length < 4) {
+            const raw = document.getElementById('input-room-code').value.trim();
+            if (!/^\d{5}$/.test(raw)) {
                 triggerHaptic('error');
-                showToast('Введите 4-значный код комнаты', '⚠️');
+                showToast('Введите 5-значный цифровой код комнаты', '⚠️');
                 return;
             }
             if (!db || !currentUserId) {
-                state.opponentName = 'Друг (' + raw + ')';
-                startSetup('friend');
+                triggerHaptic('error');
+                showToast('Для входа по коду с другого устройства подключите Firebase', '⚠️');
                 return;
             }
-            await joinRoomByCode(raw, 'friend');
+            await joinRoomByCode(raw, 'friend', true);
         }
 
-        async function createRoomInCloud(code, mode) {
+        function openRoomLobbyUI(code, isHost, roomData) {
+            document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-setup').classList.add('hidden');
+            document.getElementById('screen-battle').classList.add('hidden');
+            document.getElementById('screen-room-lobby').classList.remove('hidden');
+
+            document.getElementById('lobby-room-code-big').textContent = code;
+            const hostName = isHost ? state.user.name : (roomData?.hostName || 'Организатор');
+            document.getElementById('lobby-host-name').textContent = hostName;
+            document.getElementById('lobby-host-avatar').textContent = hostName.charAt(0).toUpperCase();
+
+            updateLobbyGuestUI(roomData, isHost);
+        }
+
+        function updateLobbyGuestUI(roomData, isHost) {
+            const guestCard = document.getElementById('lobby-guest-card');
+            const guestAvatar = document.getElementById('lobby-guest-avatar');
+            const guestNameEl = document.getElementById('lobby-guest-name');
+            const guestSubEl = document.getElementById('lobby-guest-sub');
+            const guestStatusEl = document.getElementById('lobby-guest-status');
+            const startBtn = document.getElementById('btn-lobby-start-game');
+
+            const hasGuest = Boolean(roomData && roomData.guestId);
+            const guestName = hasGuest ? (roomData.guestName || 'Друг') : (!isHost ? state.user.name : null);
+
+            if (guestName) {
+                guestCard.className = 'flex items-center justify-between bg-emerald-50/70 border border-emerald-200 p-3 rounded-2xl transition-all';
+                guestAvatar.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-sm';
+                guestAvatar.textContent = guestName.charAt(0).toUpperCase();
+                guestNameEl.className = 'text-xs font-extrabold text-slate-900';
+                guestNameEl.textContent = guestName;
+                guestSubEl.textContent = 'Готов к морскому сражению';
+                guestStatusEl.innerHTML = '<span class="text-xs font-bold text-emerald-600 bg-white border border-emerald-200 px-2.5 py-1 rounded-lg">В лобби</span>';
+
+                if (isHost) {
+                    startBtn.disabled = false;
+                    startBtn.className = 'w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98] text-white font-extrabold text-sm shadow-lg shadow-emerald-500/25 transition flex items-center justify-center gap-2 cursor-pointer';
+                    startBtn.innerHTML = '<span>⚔️ Начать игру (расстановка флота)</span>';
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.className = 'w-full py-4 rounded-2xl bg-sky-100 text-sky-800 border border-sky-200 font-extrabold text-sm flex items-center justify-center gap-2';
+                    startBtn.innerHTML = '<span>⏳ Ожидаем запуска от создателя лобби...</span>';
+                }
+            } else {
+                guestCard.className = 'flex items-center justify-between bg-slate-50 border border-slate-200 border-dashed p-3 rounded-2xl transition-all';
+                guestAvatar.className = 'w-9 h-9 rounded-full bg-slate-200 text-slate-500 font-extrabold flex items-center justify-center text-sm';
+                guestAvatar.textContent = '?';
+                guestNameEl.className = 'text-xs font-extrabold text-slate-600';
+                guestNameEl.textContent = 'Ожидание друга...';
+                guestSubEl.textContent = 'Сообщите другу 5-значный код выше';
+                guestStatusEl.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></span>';
+
+                startBtn.disabled = true;
+                startBtn.className = 'w-full py-4 rounded-2xl bg-slate-200 text-slate-400 font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-not-allowed';
+                startBtn.innerHTML = '<span>⏳ Ожидаем подключения друга...</span>';
+            }
+        }
+
+        async function hostStartRoomGame() {
+            if (!state.roomCode || state.playerRole !== 'host') return;
+            triggerHaptic('heavy');
+            if (db) {
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.roomCode), {
+                        status: 'setup'
+                    });
+                } catch (e) {}
+            }
+            document.getElementById('screen-room-lobby').classList.add('hidden');
+            startSetup('friend');
+        }
+
+        async function leaveRoomLobby() {
+            cleanupRoomListeners();
+            if (state.roomCode && db && state.playerRole === 'host') {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.roomCode));
+                } catch (e) {}
+            }
+            state.roomCode = null;
+            state.playerRole = null;
+            document.getElementById('screen-room-lobby').classList.add('hidden');
+            document.getElementById('screen-lobby').classList.remove('hidden');
+        }
+
+        async function createRoomInCloud(code, mode, useLobbyScreen) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
             const initialRoom = {
                 code,
                 mode,
-                status: 'waiting_guest',
+                status: useLobbyScreen ? 'lobby' : 'waiting_guest',
                 hostId: currentUserId,
                 hostName: state.user.name,
                 hostReady: false,
                 hostBoardJson: '',
                 hostShipsJson: '',
                 guestId: '',
-                guestName: 'Ожидание друга...',
+                guestName: '',
                 guestReady: false,
                 guestBoardJson: '',
                 guestShipsJson: '',
@@ -1117,16 +1357,18 @@
             document.getElementById('btn-find-online').classList.remove('hidden');
 
             subscribeToRoom(code);
-            startSetup(mode);
+            if (!useLobbyScreen) {
+                startSetup(mode);
+            }
         }
 
-        async function joinRoomByCode(code, mode) {
+        async function joinRoomByCode(code, mode, useLobbyScreen) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
             const snap = await getDoc(roomRef);
 
             if (!snap.exists()) {
                 triggerHaptic('error');
-                showToast('Комната с кодом ' + code + ' не найдена', '❌');
+                showToast('Комната ' + code + ' не найдена', '❌');
                 return;
             }
 
@@ -1140,7 +1382,7 @@
             await updateDoc(roomRef, {
                 guestId: currentUserId,
                 guestName: state.user.name,
-                status: 'setup'
+                status: useLobbyScreen ? 'lobby' : 'setup'
             });
 
             state.roomCode = code;
@@ -1152,7 +1394,12 @@
             document.getElementById('btn-find-online').classList.remove('hidden');
 
             subscribeToRoom(code);
-            startSetup(mode);
+            if (useLobbyScreen) {
+                openRoomLobbyUI(code, false, { ...data, guestId: currentUserId, guestName: state.user.name });
+                showToast('Вы вошли в лобби!', '✅');
+            } else {
+                startSetup(mode);
+            }
         }
 
         function subscribeToRoom(code) {
@@ -1165,9 +1412,17 @@
                 state.roomData = room;
 
                 if (state.playerRole === 'host' && room.guestId) {
-                    state.opponentName = room.guestName || 'Соперник';
+                    state.opponentName = room.guestName || 'Друг';
                     document.getElementById('setup-mode-label').textContent = state.opponentName;
-                    document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+                    document.getElementById('enemy-name-label').textContent = state.opponentName;
+                }
+
+                if (!document.getElementById('screen-room-lobby').classList.contains('hidden')) {
+                    updateLobbyGuestUI(room, state.playerRole === 'host');
+                    if (room.status === 'setup' && state.playerRole === 'guest') {
+                        document.getElementById('screen-room-lobby').classList.add('hidden');
+                        startSetup('friend');
+                    }
                 }
 
                 if (room.hostReady && room.guestReady && !state.isGameOver) {
@@ -1181,7 +1436,7 @@
         }
 
         // ==========================================
-        // 4. ЛОГИКА ПОЛЯ 8x8, РАССТАНОВКИ И ТАЙМЕРА 1 МИНУТА
+        // 4. ЛОГИКА ПОЛЯ 8x8, СВАЙП-РАССТАНОВКИ И ТАЙМЕРА 1 МИНУТА
         // ==========================================
         function createEmptyBoard() {
             return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
@@ -1238,12 +1493,10 @@
             triggerHaptic('medium');
 
             const label = document.getElementById('setup-mode-label');
-            const roomBanner = document.getElementById('multiplayer-setup-banner');
 
             if (mode === 'ai') {
                 state.roomCode = null;
                 state.playerRole = null;
-                roomBanner.classList.add('hidden');
                 const diffNames = {
                     easy: 'ИИ Матрос',
                     medium: 'ИИ Лейтенант',
@@ -1253,15 +1506,10 @@
                 label.textContent = state.opponentName;
             } else {
                 label.textContent = state.opponentName;
-                if (state.roomCode) {
-                    roomBanner.classList.remove('hidden');
-                    document.getElementById('active-room-code-display').textContent = state.roomCode;
-                } else {
-                    roomBanner.classList.add('hidden');
-                }
             }
 
             document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-room-lobby').classList.add('hidden');
             document.getElementById('screen-setup').classList.remove('hidden');
 
             clearPlayerBoard();
@@ -1398,6 +1646,75 @@
                     wrapper.appendChild(cell);
                 }
             }
+
+            wrapper.ontouchstart = handleGridTouchStart;
+            wrapper.ontouchmove = handleGridTouchMove;
+            wrapper.ontouchend = handleGridTouchEnd;
+        }
+
+        function getCellFromTouch(touch) {
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (!el || !el.classList.contains('grid-cell')) return null;
+            const r = parseInt(el.dataset.r, 10);
+            const c = parseInt(el.dataset.c, 10);
+            if (isNaN(r) || isNaN(c)) return null;
+            return { r, c };
+        }
+
+        function handleGridTouchStart(e) {
+            if (state.isFleetSubmitted || e.touches.length !== 1) return;
+            const cell = getCellFromTouch(e.touches[0]);
+            if (!cell) return;
+
+            state.swipeStartCell = cell;
+            state.swipeCurrentCell = cell;
+            state.isSwipingGrid = false;
+
+            if (state.selectedShipSize) {
+                previewShipPlacement(cell.r, cell.c, true);
+            }
+        }
+
+        function handleGridTouchMove(e) {
+            if (!state.swipeStartCell || state.isFleetSubmitted || e.touches.length !== 1) return;
+            e.preventDefault();
+            const cell = getCellFromTouch(e.touches[0]);
+            if (!cell) return;
+
+            state.swipeCurrentCell = cell;
+            const dr = cell.r - state.swipeStartCell.r;
+            const dc = cell.c - state.swipeStartCell.c;
+
+            if (Math.abs(dr) > 0 || Math.abs(dc) > 0) {
+                state.isSwipingGrid = true;
+                const swipeHoriz = Math.abs(dc) >= Math.abs(dr);
+                if (state.isHorizontal !== swipeHoriz) {
+                    state.isHorizontal = swipeHoriz;
+                    document.getElementById('orientation-text').textContent = state.isHorizontal ? 'Гориз.' : 'Вертик.';
+                }
+                const anchorR = state.isHorizontal ? state.swipeStartCell.r : Math.min(state.swipeStartCell.r, cell.r);
+                const anchorC = state.isHorizontal ? Math.min(state.swipeStartCell.c, cell.c) : state.swipeStartCell.c;
+                previewShipPlacement(anchorR, anchorC, true);
+            }
+        }
+
+        function handleGridTouchEnd(e) {
+            if (!state.swipeStartCell) return;
+            const start = state.swipeStartCell;
+            const end = state.swipeCurrentCell || start;
+            const wasSwipe = state.isSwipingGrid;
+
+            state.swipeStartCell = null;
+            state.swipeCurrentCell = null;
+            state.isSwipingGrid = false;
+            previewShipPlacement(0, 0, false);
+
+            if (wasSwipe && state.selectedShipSize) {
+                e.preventDefault();
+                const anchorR = state.isHorizontal ? start.r : Math.min(start.r, end.r);
+                const anchorC = state.isHorizontal ? Math.min(start.c, end.c) : start.c;
+                placeSelectedShipAt(anchorR, anchorC);
+            }
         }
 
         function previewShipPlacement(row, col, show) {
@@ -1415,6 +1732,32 @@
                     const cellEl = document.querySelector(`#setup-grid-wrapper .grid-cell[data-r="${r}"][data-c="${c}"]`);
                     if (cellEl) cellEl.classList.add(isValid ? 'cell-preview-valid' : 'cell-preview-invalid');
                 }
+            }
+        }
+
+        function placeSelectedShipAt(r, c) {
+            if (!state.selectedShipSize) return;
+            if (canPlaceShip(state.playerBoard, r, c, state.selectedShipSize, state.isHorizontal)) {
+                placeShipOnBoard(state.playerBoard, state.playerShips, r, c, state.selectedShipSize, state.isHorizontal);
+                triggerHaptic('medium');
+
+                const placedOfThisSize = state.playerShips.filter(s => s.size === state.selectedShipSize).length;
+                const maxOfThisSize = FLEET_CONFIG.find(f => f.size === state.selectedShipSize).count;
+                
+                if (placedOfThisSize >= maxOfThisSize) {
+                    const nextAvailable = FLEET_CONFIG.find(f => {
+                        const count = state.playerShips.filter(s => s.size === f.size).length;
+                        return count < f.count;
+                    });
+                    state.selectedShipSize = nextAvailable ? nextAvailable.size : null;
+                }
+
+                renderSetupGrid();
+                renderShipDock();
+                updateSetupControls();
+            } else {
+                triggerHaptic('error');
+                showToast('Нельзя ставить корабли вплотную или за край поля!', '⚠️');
             }
         }
 
@@ -1442,28 +1785,7 @@
                 return;
             }
 
-            if (canPlaceShip(state.playerBoard, r, c, state.selectedShipSize, state.isHorizontal)) {
-                placeShipOnBoard(state.playerBoard, state.playerShips, r, c, state.selectedShipSize, state.isHorizontal);
-                triggerHaptic('medium');
-
-                const placedOfThisSize = state.playerShips.filter(s => s.size === state.selectedShipSize).length;
-                const maxOfThisSize = FLEET_CONFIG.find(f => f.size === state.selectedShipSize).count;
-                
-                if (placedOfThisSize >= maxOfThisSize) {
-                    const nextAvailable = FLEET_CONFIG.find(f => {
-                        const count = state.playerShips.filter(s => s.size === f.size).length;
-                        return count < f.count;
-                    });
-                    state.selectedShipSize = nextAvailable ? nextAvailable.size : null;
-                }
-
-                renderSetupGrid();
-                renderShipDock();
-                updateSetupControls();
-            } else {
-                triggerHaptic('error');
-                showToast('Нельзя ставить корабли вплотную или за край поля!', '⚠️');
-            }
+            placeSelectedShipAt(r, c);
         }
 
         function renderShipDock() {
@@ -1556,8 +1878,81 @@
         }
 
         // ==========================================
-        // 5. ИГРОВОЙ ПРОЦЕСС И БОЕВАЯ СИСТЕМА
+        // 5. ИГРОВОЙ ПРОЦЕСС, ТАЙМЕР 15 СЕК И СМЕНА ЭКРАНОВ
         // ==========================================
+        function startTurnTimer() {
+            stopTurnTimer();
+            state.turnSecondsLeft = TURN_TIME_SECONDS;
+            updateTurnTimerUI();
+
+            state.turnTimerInterval = setInterval(() => {
+                if (state.isGameOver) {
+                    stopTurnTimer();
+                    return;
+                }
+                state.turnSecondsLeft--;
+                updateTurnTimerUI();
+
+                if (state.turnSecondsLeft <= 0) {
+                    stopTurnTimer();
+                    if (state.isPlayerTurn && !state.isAnimatingShot) {
+                        const available = [];
+                        for (let i = 0; i < GRID_SIZE; i++) {
+                            for (let j = 0; j < GRID_SIZE; j++) {
+                                if (state.enemyFog[i][j] === null) available.push({ r: i, c: j });
+                            }
+                        }
+                        if (available.length > 0) {
+                            const rand = available[Math.floor(Math.random() * available.length)];
+                            showToast('Время хода вышло! Автовыстрел', '⏱️');
+                            handlePlayerShot(rand.r, rand.c);
+                        }
+                    } else if (!state.roomCode) {
+                        executeOpponentTurn();
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopTurnTimer() {
+            if (state.turnTimerInterval) {
+                clearInterval(state.turnTimerInterval);
+                state.turnTimerInterval = null;
+            }
+        }
+
+        function updateTurnTimerUI() {
+            const display = document.getElementById('turn-timer-display');
+            const badge = document.getElementById('turn-timer-badge');
+            if (!display || !badge) return;
+
+            display.textContent = `00:${String(state.turnSecondsLeft).padStart(2, '0')}`;
+            if (state.turnSecondsLeft <= 5) {
+                badge.className = 'px-2.5 py-1 rounded-xl bg-rose-100 border border-rose-300 font-mono text-xs font-extrabold text-rose-700 animate-pulse shrink-0';
+            } else {
+                badge.className = 'px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 font-mono text-xs font-extrabold text-slate-700 shrink-0';
+            }
+        }
+
+        function switchBattleStageView(isPlayerAttacking) {
+            const enemyStage = document.getElementById('stage-enemy-board');
+            const playerStage = document.getElementById('stage-player-board');
+
+            if (isPlayerAttacking) {
+                playerStage.classList.remove('battle-stage-visible');
+                playerStage.classList.add('battle-stage-hidden');
+
+                enemyStage.classList.remove('battle-stage-hidden');
+                enemyStage.classList.add('battle-stage-visible');
+            } else {
+                enemyStage.classList.remove('battle-stage-visible');
+                enemyStage.classList.add('battle-stage-hidden');
+
+                playerStage.classList.remove('battle-stage-hidden');
+                playerStage.classList.add('battle-stage-visible');
+            }
+        }
+
         function startLocalBattle() {
             triggerHaptic('heavy');
             const enemyFleet = generateRandomFleet();
@@ -1568,18 +1963,20 @@
             state.playerShotsLog = createEmptyBoard();
 
             state.isPlayerTurn = true;
+            state.isAnimatingShot = false;
             state.isGameOver = false;
             state.playerShots = 0;
             state.playerHits = 0;
             state.aiTargetsQueue = [];
 
-            document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+            document.getElementById('enemy-name-label').textContent = state.opponentName;
             document.getElementById('screen-setup').classList.add('hidden');
             document.getElementById('screen-battle').classList.remove('hidden');
 
-            updateBattleUI();
             renderEnemyGrid();
-            renderMiniPlayerGrid();
+            renderPlayerBattleGrid();
+            updateBattleUI();
+            startTurnTimer();
         }
 
         function launchMultiplayerBattle(room) {
@@ -1593,22 +1990,24 @@
             state.playerShotsLog = createEmptyBoard();
 
             state.isPlayerTurn = (room.turn === state.playerRole);
+            state.isAnimatingShot = false;
             state.isGameOver = false;
             state.playerShots = 0;
             state.playerHits = 0;
 
-            document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+            document.getElementById('enemy-name-label').textContent = state.opponentName;
             document.getElementById('screen-setup').classList.add('hidden');
             document.getElementById('screen-battle').classList.remove('hidden');
 
-            syncMultiplayerBattleState(room);
+            syncMultiplayerBattleState(room, true);
         }
 
-        function syncMultiplayerBattleState(room) {
+        function syncMultiplayerBattleState(room, isInitial = false) {
             if (state.isGameOver) return;
 
             const shots = JSON.parse(room.shotsJson || '[]');
             const myRole = state.playerRole;
+            const prevTurn = state.isPlayerTurn;
 
             state.enemyFog = createEmptyBoard();
             state.playerShotsLog = createEmptyBoard();
@@ -1666,11 +2065,28 @@
 
             state.playerShots = myShotsCount;
             state.playerHits = myHitsCount;
-            state.isPlayerTurn = (room.turn === myRole);
+            const newTurn = (room.turn === myRole);
 
             renderEnemyGrid();
-            renderMiniPlayerGrid();
-            updateBattleUI();
+            renderPlayerBattleGrid();
+
+            // Если ход сменился, даём 0.5 секунды задержки чтобы увидеть результат последнего выстрела
+            if (!isInitial && prevTurn !== newTurn) {
+                state.isAnimatingShot = true;
+                setTimeout(() => {
+                    if (state.isGameOver) return;
+                    state.isPlayerTurn = newTurn;
+                    state.isAnimatingShot = false;
+                    renderEnemyGrid();
+                    updateBattleUI();
+                    startTurnTimer();
+                }, SHOT_DELAY_MS);
+            } else {
+                state.isPlayerTurn = newTurn;
+                state.isAnimatingShot = false;
+                updateBattleUI();
+                startTurnTimer();
+            }
 
             if (room.winner) {
                 endGame(room.winner === myRole);
@@ -1685,20 +2101,23 @@
             const turnText = document.getElementById('turn-text');
             const indicator = document.getElementById('turn-indicator');
 
+            switchBattleStageView(state.isPlayerTurn);
+
             if (state.isPlayerTurn) {
                 turnText.textContent = 'Ваш ход! Стреляйте';
-                turnText.className = 'text-sm font-extrabold text-emerald-600';
-                indicator.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-ping';
+                turnText.className = 'text-sm font-extrabold text-emerald-600 truncate';
+                indicator.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-ping shrink-0';
             } else {
                 turnText.textContent = `Ходит ${state.opponentName}...`;
-                turnText.className = 'text-sm font-extrabold text-amber-600';
-                indicator.className = 'w-3 h-3 rounded-full bg-amber-500 animate-pulse';
+                turnText.className = 'text-sm font-extrabold text-amber-600 truncate';
+                indicator.className = 'w-3 h-3 rounded-full bg-amber-500 animate-pulse shrink-0';
             }
 
             const playerAlive = state.playerShips.filter(s => !s.sunk).length;
             const enemyAlive = state.enemyShips.filter(s => !s.sunk).length;
 
             document.getElementById('player-ships-left').textContent = `${playerAlive} из 10`;
+            document.getElementById('player-ships-left-hint').textContent = `${playerAlive} из 10`;
             document.getElementById('enemy-ships-left').textContent = `${enemyAlive} из 10`;
         }
 
@@ -1720,7 +2139,7 @@
                     if (status === null) {
                         classes += 'bg-white border-sky-200/90 hover:border-rose-400 cursor-pointer shadow-2xs';
                     } else if (status === 'miss') {
-                        classes += 'bg-slate-100 border-slate-200 cell-miss';
+                        classes += 'bg-slate-100 border-slate-300 cell-miss';
                     } else if (status === 'hit') {
                         classes += 'cell-hit';
                     } else if (status === 'sunk') {
@@ -1728,7 +2147,7 @@
                     }
 
                     cell.className = classes;
-                    if (status === null && state.isPlayerTurn && !state.isGameOver) {
+                    if (status === null && state.isPlayerTurn && !state.isAnimatingShot && !state.isGameOver) {
                         cell.addEventListener('click', () => handlePlayerShot(r, c));
                     }
 
@@ -1737,32 +2156,44 @@
             }
         }
 
-        function renderMiniPlayerGrid() {
-            const mini = document.getElementById('mini-player-grid');
-            mini.innerHTML = '';
+        function renderPlayerBattleGrid() {
+            const wrapper = document.getElementById('player-battle-grid-wrapper');
+            wrapper.innerHTML = '';
 
             for (let r = 0; r < GRID_SIZE; r++) {
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'flex items-center justify-center text-[10px] font-mono font-bold text-slate-400';
+                rowLabel.textContent = r + 1;
+                wrapper.appendChild(rowLabel);
+
                 for (let c = 0; c < GRID_SIZE; c++) {
                     const cell = document.createElement('div');
                     const shipCell = state.playerBoard[r][c];
                     const shotStatus = state.playerShotsLog[r][c];
 
-                    let bg = 'bg-white border border-sky-100';
-                    if (shipCell) bg = 'bg-sky-500';
-                    if (shotStatus === 'miss') bg = 'bg-slate-300';
-                    if (shotStatus === 'hit') bg = 'bg-rose-500';
+                    let classes = 'grid-cell rounded-md border ';
+                    if (shotStatus === 'hit') {
+                        const ship = shipCell ? state.playerShips.find(s => s.id === shipCell.shipId) : null;
+                        classes += (ship && ship.sunk) ? 'cell-hit cell-sunk' : 'cell-hit';
+                    } else if (shotStatus === 'miss') {
+                        classes += 'bg-slate-100 border-slate-300 cell-miss';
+                    } else if (shipCell) {
+                        classes += 'cell-ship';
+                    } else {
+                        classes += 'bg-white border-sky-200/90';
+                    }
 
-                    cell.className = `rounded-[2px] ${bg}`;
-                    mini.appendChild(cell);
+                    cell.className = classes;
+                    wrapper.appendChild(cell);
                 }
             }
         }
 
         async function handlePlayerShot(r, c) {
-            if (!state.isPlayerTurn || state.isGameOver || state.enemyFog[r][c] !== null) return;
+            if (!state.isPlayerTurn || state.isAnimatingShot || state.isGameOver || state.enemyFog[r][c] !== null) return;
 
             if (state.roomCode && db && state.roomData) {
-                state.isPlayerTurn = false;
+                state.isAnimatingShot = true;
                 const targetCell = state.enemyBoard[r][c];
                 const isHit = Boolean(targetCell);
                 const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
@@ -1814,20 +2245,28 @@
 
                 renderEnemyGrid();
                 updateBattleUI();
+                startTurnTimer();
 
                 if (state.enemyShips.every(s => s.sunk)) {
                     endGame(true);
                 }
             } else {
+                // Блокируем повторные клики, показываем тёмную жирную точку промаха и ждём 0.5 секунды
+                state.isAnimatingShot = true;
                 state.enemyFog[r][c] = 'miss';
-                document.getElementById('last-action-log').textContent = `${coordStr}: Мимо`;
+                document.getElementById('last-action-log').textContent = `${coordStr}: Мимо — ход переходит к противнику`;
                 triggerHaptic('light');
 
-                state.isPlayerTurn = false;
                 renderEnemyGrid();
-                updateBattleUI();
 
-                setTimeout(executeOpponentTurn, 850);
+                setTimeout(() => {
+                    if (state.isGameOver) return;
+                    state.isPlayerTurn = false;
+                    state.isAnimatingShot = false;
+                    updateBattleUI();
+                    startTurnTimer();
+                    setTimeout(executeOpponentTurn, 950);
+                }, SHOT_DELAY_MS);
             }
         }
 
@@ -1877,7 +2316,10 @@
                 c = choice.c;
             }
 
+            const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
+            const coordStr = `${letters[c]}${r + 1}`;
             const playerCell = state.playerBoard[r][c];
+
             if (playerCell) {
                 state.playerShotsLog[r][c] = 'hit';
                 triggerHaptic('warning');
@@ -1899,8 +2341,10 @@
                             }
                         }
                     });
+                    document.getElementById('last-action-log').textContent = `${coordStr}: Ваш корабль потоплен!`;
                     showToast('Противник потопил ваш корабль!', '⚠️');
                 } else {
+                    document.getElementById('last-action-log').textContent = `${coordStr}: Попадание по вашим палубам!`;
                     if (state.aiDifficulty !== 'easy' || Math.random() < 0.5) {
                         const neighbors = [
                             { r: r - 1, c }, { r: r + 1, c },
@@ -1910,20 +2354,28 @@
                     }
                 }
 
-                renderMiniPlayerGrid();
+                renderPlayerBattleGrid();
                 updateBattleUI();
+                startTurnTimer();
 
                 if (state.playerShips.every(s => s.sunk)) {
                     endGame(false);
                 } else {
-                    setTimeout(executeOpponentTurn, 850);
+                    setTimeout(executeOpponentTurn, 950);
                 }
             } else {
+                // Показываем жирную точку промаха врага на ваших палубах и даём 0.5 секунды задержки перед сменой экрана
                 state.playerShotsLog[r][c] = 'miss';
-                state.isPlayerTurn = true;
-                renderMiniPlayerGrid();
-                renderEnemyGrid();
-                updateBattleUI();
+                document.getElementById('last-action-log').textContent = `${coordStr}: Противник промахнулся!`;
+                renderPlayerBattleGrid();
+
+                setTimeout(() => {
+                    if (state.isGameOver) return;
+                    state.isPlayerTurn = true;
+                    renderEnemyGrid();
+                    updateBattleUI();
+                    startTurnTimer();
+                }, SHOT_DELAY_MS);
             }
         }
 
@@ -1950,21 +2402,26 @@
         async function endGame(isVictory) {
             if (state.isGameOver) return;
             state.isGameOver = true;
+            stopTurnTimer();
             cleanupRoomListeners();
             triggerHaptic(isVictory ? 'success' : 'error');
 
             const accuracy = state.playerShots > 0 ? Math.round((state.playerHits / state.playerShots) * 100) : 0;
+            const sunkEnemyShipsCount = state.enemyShips.filter(s => s.sunk).length;
 
-            let earnedXp = isVictory ? 70 : 25;
+            let earnedXp = 0;
             if (isVictory) {
+                earnedXp = 70;
                 if (state.gameMode === 'online' || state.gameMode === 'friend') {
                     earnedXp += 20;
                 } else if (state.gameMode === 'ai') {
                     if (state.aiDifficulty === 'medium') earnedXp += 10;
                     if (state.aiDifficulty === 'hard') earnedXp += 25;
                 }
+                earnedXp += Math.round(accuracy * 0.2);
+            } else {
+                earnedXp = Math.min(7, Math.max(1, Math.round((sunkEnemyShipsCount / 10) * 7)));
             }
-            earnedXp += Math.round(accuracy * 0.2);
 
             if (isVictory) state.user.wins++;
 
@@ -1994,7 +2451,7 @@
             document.getElementById('gameover-title').className = `text-2xl font-extrabold mb-1 ${isVictory ? 'text-emerald-600' : 'text-rose-600'}`;
             document.getElementById('gameover-subtitle').textContent = isVictory 
                 ? `Вы разгромили флот (${state.opponentName})!` 
-                : 'Ваш флот был уничтожен. Попробуйте новую тактику!';
+                : `Потоплено кораблей врага: ${sunkEnemyShipsCount} из 10.`;
 
             const reqXpNow = getRequiredXpForLevel(state.user.level);
             const pctNow = Math.min(100, Math.round((state.user.xp / reqXpNow) * 100));
@@ -2060,6 +2517,8 @@
             cancelOnlineMatchmaking,
             createPrivateRoom,
             joinPrivateRoom,
+            hostStartRoomGame,
+            leaveRoomLobby,
             startSetup,
             backToLobby,
             clearPlayerBoard,
