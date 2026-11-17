@@ -1,0 +1,2076 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Морской Бой — Telegram Mini App</title>
+    <!-- Подключение Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Подключение Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Шрифт Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f9ff;
+            color: #0f172a;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        .sea-bg {
+            background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f8fafc 65%, #f1f5f9 100%);
+        }
+
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            transition: transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .grid-cell:active {
+            transform: scale(0.92);
+        }
+
+        @keyframes pulse-hit {
+            0% { transform: scale(0.75); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .cell-hit {
+            animation: pulse-hit 0.28s ease-out forwards;
+            background: linear-gradient(135deg, #f43f5e, #e11d48) !important;
+            border-color: #be123c !important;
+            position: relative;
+        }
+        .cell-hit::after {
+            content: '✕';
+            color: white;
+            font-weight: 800;
+            font-size: 1.05rem;
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cell-sunk {
+            background: linear-gradient(135deg, #9f1239, #4c0519) !important;
+            border-color: #881337 !important;
+        }
+
+        .cell-miss {
+            position: relative;
+        }
+        .cell-miss::after {
+            content: '';
+            width: 7px;
+            height: 7px;
+            background-color: #64748b;
+            border-radius: 9999px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .cell-ship {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            border-color: #075985;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        }
+
+        .cell-preview-valid {
+            background-color: rgba(16, 185, 129, 0.3) !important;
+            border-color: #10b981 !important;
+        }
+
+        .cell-preview-invalid {
+            background-color: rgba(244, 63, 94, 0.3) !important;
+            border-color: #f43f5e !important;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.4);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="sea-bg min-h-screen flex flex-col justify-between">
+
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ (ПРОФИЛЬ, ЗВАНИЕ, УРОВЕНЬ, XP, МОНЕТКИ И ДРУЗЬЯ) -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-sky-200/80 px-3 py-2.5 shadow-xs">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-2">
+            <!-- Профиль + Уровень, Звание и XP -->
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <div class="relative shrink-0">
+                    <div id="user-avatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-sm text-sm">
+                        К
+                    </div>
+                    <span id="user-level-badge" class="absolute -bottom-1 -right-1 bg-amber-400 text-slate-900 text-[10px] font-extrabold px-1.5 py-0.2 rounded-full border border-white shadow-xs">
+                        1 ур.
+                    </span>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5">
+                        <span id="user-name" class="text-xs font-extrabold text-slate-900 truncate">Капитан</span>
+                        <span id="user-rank-label" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 shrink-0">
+                            🛟 Юнга
+                        </span>
+                    </div>
+                    <!-- Полоска XP -->
+                    <div class="flex items-center gap-1.5 mt-1">
+                        <div class="w-full max-w-[96px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div id="xp-bar-fill" class="h-full bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                        <span id="xp-text" class="text-[10px] font-semibold text-slate-500 whitespace-nowrap">0/120 XP</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Правая группа: Монетки + Кнопка друзей -->
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="showCoinsInfo()" class="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 px-2.5 py-1.5 rounded-xl transition active:scale-95 shadow-2xs" title="Ваши монетки">
+                    <span class="text-sm leading-none">🪙</span>
+                    <span id="user-coins" class="text-xs font-extrabold text-amber-800">0</span>
+                </button>
+
+                <button onclick="openFriendsModal()" class="relative flex items-center gap-1 bg-sky-50 hover:bg-sky-100 active:scale-95 transition border border-sky-200 px-2.5 py-1.5 rounded-xl text-xs font-bold text-sky-800 shadow-2xs">
+                    <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span id="friends-badge" class="bg-sky-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">2</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ (TOAST) -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-2 w-11/12 max-w-sm">
+        <div class="bg-slate-900/95 backdrop-blur-md border border-slate-700 text-white text-xs font-medium px-4 py-3 rounded-2xl shadow-xl flex items-center justify-center gap-2 text-center">
+            <span>ℹ️</span>
+            <span id="toast-text">Уведомление</span>
+        </div>
+    </div>
+
+    <!-- ОСНОВНОЙ КОНТЕЙНЕР ПРИЛОЖЕНИЯ -->
+    <main class="flex-1 max-w-md w-full mx-auto px-4 py-4 flex flex-col">
+
+        <!-- ========================================== -->
+        <!-- ЭКРАН 1: ГЛАВНОЕ ЛОББИ С 3 ВКЛАДКАМИ       -->
+        <!-- ========================================== -->
+        <section id="screen-lobby" class="flex-1 flex flex-col justify-between space-y-4">
+            
+            <!-- Навигационные вкладки -->
+            <div class="bg-white p-1.5 rounded-2xl border border-sky-200/80 shadow-xs grid grid-cols-3 gap-1">
+                <button onclick="switchTab('ai')" id="tab-ai" class="tab-btn py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 bg-sky-600 text-white shadow-md shadow-sky-600/20">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    <span>С AI</span>
+                </button>
+                <button onclick="switchTab('online')" id="tab-online" class="tab-btn py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-800">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                    <span>Онлайн</span>
+                </button>
+                <button onclick="switchTab('friends')" id="tab-friends" class="tab-btn py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-800">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <span>С друзьями</span>
+                </button>
+            </div>
+
+            <!-- КОНТЕНТ ВКЛАДКИ: ИГРАТЬ С AI -->
+            <div id="content-ai" class="tab-content flex-1 flex flex-col justify-between bg-white border border-sky-100 rounded-3xl p-5 shadow-sm">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-sky-600">Тренировка и тактика</span>
+                        <span class="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full">+XP за бой</span>
+                    </div>
+                    <h2 class="text-xl font-extrabold text-slate-900 mb-2">Битва против ИИ</h2>
+                    <p class="text-xs text-slate-500 leading-relaxed mb-5">
+                        Сразитесь с умным алгоритмом на поле 8×8. Зарабатывайте опыт (XP), повышайте звание и копите монетки!
+                    </p>
+
+                    <!-- Выбор сложности AI (вертикально друг под другом) -->
+                    <div class="space-y-2 mb-6">
+                        <label class="text-xs font-bold text-slate-700 block">Выберите уровень сложности:</label>
+                        <div class="grid grid-cols-1 gap-2">
+                            <button onclick="setAiDifficulty('easy')" id="diff-easy" class="p-3 rounded-2xl border border-slate-200 bg-slate-50 text-left transition hover:border-slate-300 flex items-center justify-between">
+                                <div class="font-bold text-xs text-slate-900">⚓ Матрос</div>
+                                <div class="text-[11px] font-medium text-slate-500">Лёгкий уровень</div>
+                            </button>
+                            <button onclick="setAiDifficulty('medium')" id="diff-medium" class="p-3 rounded-2xl border-2 border-sky-500 bg-sky-50/70 text-left transition flex items-center justify-between">
+                                <div class="font-bold text-xs text-slate-900">🎖️ Лейтенант</div>
+                                <div class="text-[11px] font-medium text-slate-500">Средний (+10 XP)</div>
+                            </button>
+                            <button onclick="setAiDifficulty('hard')" id="diff-hard" class="p-3 rounded-2xl border border-slate-200 bg-slate-50 text-left transition hover:border-slate-300 flex items-center justify-between">
+                                <div class="font-bold text-xs text-slate-900">👑 Адмирал Флота</div>
+                                <div class="text-[11px] font-medium text-slate-500">Сложный (+25 XP)</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="startSetup('ai')" class="w-full py-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 active:scale-[0.98] text-white font-extrabold text-sm shadow-lg shadow-sky-500/25 transition flex items-center justify-center gap-2">
+                    <span>⚓ Расставить флот и в бой</span>
+                </button>
+            </div>
+
+            <!-- КОНТЕНТ ВКЛАДКИ: ИГРАТЬ ОНЛАЙН -->
+            <div id="content-online" class="tab-content hidden flex-1 flex flex-col justify-between bg-white border border-sky-100 rounded-3xl p-5 shadow-sm">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Мультиплеер в реальном времени</span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span id="online-status-label">Сеть активна</span>
+                        </span>
+                    </div>
+                    <h2 class="text-xl font-extrabold text-slate-900 mb-2">Случайный соперник</h2>
+                    <p class="text-xs text-slate-500 leading-relaxed mb-5">
+                        Подбор реального игрока в общую комнату. На расстановку флота даётся ровно 1 минута, выстрелы синхронизируются мгновенно!
+                    </p>
+
+                    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-500">Награда за победу:</span>
+                            <span class="font-bold text-indigo-600">+90 XP к уровню</span>
+                        </div>
+                    </div>
+
+                    <!-- Индикатор поиска соперника -->
+                    <div id="matchmaking-box" class="hidden mt-4 bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-center">
+                        <div class="inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                        <div class="text-xs font-extrabold text-indigo-900" id="matchmaking-status">Поиск свободного капитана...</div>
+                        <button onclick="cancelOnlineMatchmaking()" class="mt-2.5 px-3 py-1 rounded-lg bg-white border border-indigo-200 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition">
+                            Отменить поиск
+                        </button>
+                    </div>
+                </div>
+
+                <button id="btn-find-online" onclick="findOnlineMatch()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 active:scale-[0.98] text-white font-extrabold text-sm shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2 mt-4">
+                    <span>🔍 Найти соперника</span>
+                </button>
+            </div>
+
+            <!-- КОНТЕНТ ВКЛАДКИ: ИГРАТЬ С ДРУЗЬЯМИ -->
+            <div id="content-friends" class="tab-content hidden flex-1 flex flex-col justify-between bg-white border border-sky-100 rounded-3xl p-5 shadow-sm">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Приватная комната</span>
+                        <button onclick="openFriendsModal()" class="text-xs text-sky-600 underline font-bold">+ Добавить по коду</button>
+                    </div>
+                    <h2 class="text-xl font-extrabold text-slate-900 mb-2">Игра с друзьями</h2>
+                    <p class="text-xs text-slate-500 leading-relaxed mb-3">
+                        Создайте комнату и отправьте код другу, либо введите код комнаты друга для подключения в реальном времени.
+                    </p>
+
+                    <!-- Создание / Вход в комнату по коду -->
+                    <div class="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 mb-3 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="createPrivateRoom()" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-xs shadow-xs active:scale-95 transition">
+                                ⚓ Создать комнату
+                            </button>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="input-room-code" placeholder="Код комнаты (напр. 4821)" maxlength="10" class="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 uppercase">
+                            <button onclick="joinPrivateRoom()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs active:scale-95 transition">
+                                Войти
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Список друзей -->
+                    <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1" id="lobby-friends-list">
+                        <!-- Заполняется через JS -->
+                    </div>
+                </div>
+
+                <div class="space-y-2 mt-3">
+                    <button onclick="inviteViaTelegram()" class="w-full py-3.5 rounded-2xl bg-[#2AABEE] hover:bg-[#229ED9] active:scale-[0.98] text-white font-bold text-sm shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                        <span>Отправить вызов в Telegram</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Карточка-справка по правилам и званиям -->
+            <div class="bg-white/90 border border-sky-100 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
+                <div>
+                    <div class="text-xs font-bold text-slate-800">Правила флота 8×8 и уровней</div>
+                    <div class="text-[11px] text-slate-500">+25 🪙 за лвл • +100 🪙 на 10/20/30 ур.</div>
+                </div>
+                <button onclick="openRulesModal()" class="text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-xl transition">
+                    Подробнее
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- ЭКРАН 2: РАССТАНОВКА КОРАБЛЕЙ (8x8 + 60с)  -->
+        <!-- ========================================== -->
+        <section id="screen-setup" class="hidden flex-1 flex flex-col justify-between space-y-3">
+            <!-- Верхняя панель расстановки с таймером на 1 минуту -->
+            <div class="flex items-center justify-between gap-2">
+                <button onclick="backToLobby()" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 py-1.5 px-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    ← Назад
+                </button>
+                
+                <!-- Таймер 01:00 -->
+                <div id="setup-timer-badge" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100 border border-sky-200 text-sky-800 font-mono text-xs font-extrabold transition-colors">
+                    <span>⏱️</span>
+                    <span id="setup-timer-display">01:00</span>
+                </div>
+
+                <div class="text-xs font-bold text-sky-700 truncate max-w-[110px]" id="setup-mode-label">Против AI</div>
+            </div>
+
+            <!-- Баннер кода комнаты (для мультиплеера) -->
+            <div id="multiplayer-setup-banner" class="hidden bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between">
+                <div>
+                    <div class="text-[11px] font-semibold text-indigo-700">Код комнаты (передайте другу):</div>
+                    <div class="font-mono text-base font-extrabold text-indigo-950" id="active-room-code-display">----</div>
+                </div>
+                <button onclick="copyActiveRoomCode()" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-xs active:scale-95 transition">
+                    Копировать
+                </button>
+            </div>
+
+            <!-- Сетка 8x8 для расстановки -->
+            <div class="bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center">
+                <div class="w-full flex justify-between items-center mb-2 px-1">
+                    <span class="text-xs font-bold text-slate-700">Ваша эскадра (<span id="ships-counter" class="text-sky-600">0 / 10</span>)</span>
+                    <button onclick="toggleOrientation()" id="btn-rotate" class="text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1 rounded-lg flex items-center gap-1 active:scale-95 transition">
+                        🔄 <span id="orientation-text">Гориз.</span>
+                    </button>
+                </div>
+
+                <!-- Буквы координат А-З -->
+                <div class="grid grid-cols-9 gap-1 w-full max-w-[320px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                    <div></div>
+                    <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                </div>
+
+                <!-- Поле 8x8 -->
+                <div id="setup-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                    <!-- Генерируется через JS -->
+                </div>
+
+                <!-- Панель выбора кораблей -->
+                <div class="w-full mt-3.5">
+                    <div class="text-[11px] font-medium text-slate-500 mb-1.5 text-center">Выберите тип корабля и нажмите на клетку поля:</div>
+                    <div id="ship-dock" class="grid grid-cols-4 gap-1.5">
+                        <!-- Генерируется через JS -->
+                    </div>
+                </div>
+
+                <!-- Кнопки управления расстановкой -->
+                <div class="grid grid-cols-2 gap-2.5 w-full mt-4">
+                    <button onclick="autoPlacePlayerShips()" class="py-3 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-bold text-slate-700 active:scale-95 transition flex items-center justify-center gap-1.5">
+                        <span>🎲 Случайно</span>
+                    </button>
+                    <button onclick="clearPlayerBoard()" class="py-3 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-bold text-rose-600 active:scale-95 transition flex items-center justify-center gap-1.5">
+                        <span>🗑️ Очистить</span>
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="confirmFleetReady()" id="btn-start-battle" disabled class="w-full py-4 rounded-2xl bg-slate-200 text-slate-400 font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-not-allowed">
+                <span>⚔️ В бой! (Расставьте все корабли)</span>
+            </button>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- ЭКРАН 3: ИГРОВОЙ ПРОЦЕСС (БОЙ)             -->
+        <!-- ========================================== -->
+        <section id="screen-battle" class="hidden flex-1 flex flex-col justify-between space-y-3">
+            
+            <!-- Статус хода -->
+            <div class="bg-white border border-sky-200/80 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+                <div class="flex items-center gap-2.5">
+                    <div id="turn-indicator" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+                    <div>
+                        <div id="turn-text" class="text-sm font-extrabold text-emerald-600">Ваш ход!</div>
+                        <div id="last-action-log" class="text-[11px] font-medium text-slate-500">Выберите клетку на поле противника</div>
+                    </div>
+                </div>
+                <button onclick="confirmSurrender()" class="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-xl transition">
+                    Сдаться
+                </button>
+            </div>
+
+            <!-- Основное поле атаки (Поле противника 8x8) -->
+            <div class="bg-white border border-sky-200/80 rounded-3xl p-3.5 shadow-sm flex flex-col items-center">
+                <div class="w-full flex justify-between items-center mb-2 px-1">
+                    <span class="text-xs font-extrabold text-rose-600 flex items-center gap-1.5">
+                        🎯 Акватория противника
+                    </span>
+                    <span class="text-[11px] font-semibold text-slate-500">Кораблей: <b id="enemy-ships-left" class="text-slate-900">10</b></span>
+                </div>
+
+                <!-- Буквы координат А-З -->
+                <div class="grid grid-cols-9 gap-1 w-full max-w-[320px] mb-1 text-center text-[10px] font-mono font-bold text-slate-400">
+                    <div></div>
+                    <div>А</div><div>Б</div><div>В</div><div>Г</div><div>Д</div><div>Е</div><div>Ж</div><div>З</div>
+                </div>
+
+                <div id="enemy-grid-wrapper" class="grid grid-cols-9 gap-1 w-full max-w-[320px] bg-sky-50/70 p-1.5 rounded-2xl border border-sky-100">
+                    <!-- Генерируется через JS -->
+                </div>
+            </div>
+
+            <!-- Мини-радар игрока (Ваш флот) -->
+            <div class="bg-white border border-sky-200/80 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs">
+                <div class="flex-1">
+                    <div class="text-xs font-extrabold text-sky-700 mb-1">🛡️ Ваша эскадра</div>
+                    <p class="text-[11px] text-slate-500 leading-snug mb-2">
+                        При попадании вы получаете дополнительный выстрел.
+                    </p>
+                    <div class="flex gap-3 text-[11px]">
+                        <span class="text-slate-500">У вас: <b id="player-ships-left" class="text-emerald-600">10</b></span>
+                        <span class="text-slate-500 truncate max-w-[125px]"><span id="enemy-name-label">Противник:</span> <b class="text-rose-600">в бою</b></span>
+                    </div>
+                </div>
+
+                <!-- Мини-сетка 8x8 игрока -->
+                <div id="mini-player-grid" class="grid grid-cols-8 gap-0.5 w-24 h-24 bg-sky-50 p-1.5 rounded-xl border border-sky-200 shrink-0">
+                    <!-- Генерируется через JS -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ ДРУЗЕЙ ПО КОДУ  -->
+    <!-- ========================================== -->
+    <div id="modal-friends" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-extrabold text-slate-900">Друзья и код приглашения</h3>
+                <button onclick="closeModal('modal-friends')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold">✕</button>
+            </div>
+
+            <!-- Ваш уникальный код -->
+            <div class="bg-sky-50 border border-sky-200 rounded-2xl p-3.5">
+                <div class="text-[11px] font-semibold text-slate-500 mb-1">Ваш уникальный код капитана:</div>
+                <div class="flex items-center justify-between gap-2">
+                    <span id="my-friend-code" class="font-mono text-base font-extrabold tracking-wider text-sky-700">SB-8942-TG</span>
+                    <button onclick="copyFriendCode()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold active:scale-95 transition shadow-xs">
+                        Копировать
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ввод кода друга -->
+            <div>
+                <label class="text-xs font-bold text-slate-700 block mb-1.5">Добавить друга по коду:</label>
+                <div class="flex gap-2">
+                    <input type="text" id="input-friend-code" placeholder="Например: SB-1234-TG" maxlength="12" class="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 uppercase">
+                    <button onclick="addFriendByCode()" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs active:scale-95 transition shadow-xs">
+                        Добавить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Список добавленных друзей -->
+            <div>
+                <div class="text-xs font-bold text-slate-500 mb-2">Ваши друзья (<span id="modal-friends-count">2</span>):</div>
+                <div id="modal-friends-list" class="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    <!-- Генерируется через JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- МОДАЛЬНОЕ ОКНО: ПРАВИЛА, ЗВАНИЯ И МОНЕТКИ  -->
+    <!-- ========================================== -->
+    <div id="modal-rules" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-extrabold text-slate-900">Правила и карьерные звания</h3>
+                <button onclick="closeModal('modal-rules')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="space-y-2.5 text-xs text-slate-600 leading-relaxed">
+                <p><b class="text-slate-900">1. Игровое поле 8×8:</b> Координаты от А до З и от 1 до 8.</p>
+                <p><b class="text-slate-900">2. Состав эскадры (10 кораблей):</b> 1 четырехпалубный, 2 трехпалубных, 3 двухпалубных и 4 однопалубных.</p>
+                <p><b class="text-slate-900">3. Таймер подготовки:</b> У вас есть ровно <b>1 минута (60 сек.)</b>. Если время истечёт, флот достроится автоматически.</p>
+                <p><b class="text-slate-900">4. Экономика и монетки 🪙:</b> За каждый новый уровень начисляется <b>+25 монеток</b>, а за юбилейные 10, 20, 30... уровни — <b>+100 монеток</b>!</p>
+                
+                <!-- Таблица званий -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 mt-2">
+                    <div class="font-extrabold text-slate-800 mb-2">🎖️ Табель о рангах (путь до Адмирала Флота):</div>
+                    <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🛟 Юнга</span><b class="text-sky-700">1–4 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>⚓ Матрос</span><b class="text-sky-700">5–9 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🧭 Старшина</span><b class="text-sky-700">10–14 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🔭 Мичман</span><b class="text-sky-700">15–19 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🎖️ Мл. лейтенант</span><b class="text-sky-700">20–24 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>⚔️ Лейтенант</span><b class="text-sky-700">25–29 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🛡️ Кап.-лейтенант</span><b class="text-sky-700">30–39 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🚢 Капитан 3 р.</span><b class="text-sky-700">40–49 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>🦅 Капитан 1 р.</span><b class="text-sky-700">50–64 ур.</b></div>
+                        <div class="flex justify-between bg-white px-2 py-1 rounded-lg border border-slate-100"><span>⭐ Контр-адмирал</span><b class="text-sky-700">65–79 ур.</b></div>
+                        <div class="col-span-2 flex justify-between bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 font-bold text-amber-900"><span>👑 Адмирал Флота</span><span>80+ ур.</span></div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeModal('modal-rules')" class="w-full py-3 rounded-xl bg-sky-600 text-white font-bold text-xs shadow-sm">Понятно, в бой!</button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- МОДАЛЬНОЕ ОКНО: ПОДТВЕРЖДЕНИЕ СДАЧИ        -->
+    <!-- ========================================== -->
+    <div id="modal-surrender" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 w-full max-w-xs rounded-3xl p-5 shadow-2xl text-center space-y-4">
+            <div class="text-3xl">🏳️</div>
+            <h3 class="text-base font-extrabold text-slate-900">Покинуть сражение?</h3>
+            <p class="text-xs text-slate-500">Вам будет засчитано поражение, но вы всё равно получите утешительный опыт (XP).</p>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="closeModal('modal-surrender')" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">Отмена</button>
+                <button onclick="surrenderGame()" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white">Сдаться</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- МОДАЛЬНОЕ ОКНО: РЕЗУЛЬТАТ ИГРЫ + XP/МОНЕТЫ -->
+    <!-- ========================================== -->
+    <div id="modal-gameover" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white border border-sky-200 w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            <div id="gameover-emoji" class="text-5xl">🏆</div>
+            <div>
+                <h2 id="gameover-title" class="text-2xl font-extrabold text-slate-900 mb-1">Победа!</h2>
+                <p id="gameover-subtitle" class="text-xs text-slate-500">Вы разгромили эскадру противника!</p>
+            </div>
+
+            <!-- Блок начисления XP, звания и монеток -->
+            <div class="bg-sky-50/80 border border-sky-200/80 rounded-2xl p-3.5 space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-600">Получено опыта:</span>
+                    <span id="reward-xp-earned" class="font-extrabold text-sky-600">+85 XP</span>
+                </div>
+                
+                <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div id="reward-xp-bar" class="h-full bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full transition-all duration-700" style="width: 45%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] font-bold text-slate-500">
+                    <span id="reward-level-label">🛟 Юнга (1 ур.)</span>
+                    <span id="reward-xp-progress">85 / 120 XP</span>
+                </div>
+
+                <!-- Плашка повышения уровня / звания и монет -->
+                <div id="levelup-banner" class="hidden bg-amber-100 border border-amber-300 rounded-xl p-2.5 space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-extrabold text-amber-900">🎉 Новый уровень!</span>
+                        <span id="reward-coins-earned" class="text-xs font-extrabold text-amber-800 bg-white px-2 py-0.5 rounded-lg shadow-2xs">+25 🪙</span>
+                    </div>
+                    <div id="rankup-text" class="hidden text-[11px] font-extrabold text-sky-800 bg-white/80 px-2 py-1 rounded-lg">
+                        🎖️ Новое звание: Матрос!
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 grid grid-cols-2 gap-2 text-center">
+                <div>
+                    <div class="text-[11px] text-slate-500">Выстрелов</div>
+                    <div id="stat-shots" class="text-base font-extrabold text-slate-900">0</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-slate-500">Точность</div>
+                    <div id="stat-accuracy" class="text-base font-extrabold text-sky-600">0%</div>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <button onclick="playAgain()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-sm shadow-lg shadow-sky-500/25 active:scale-95 transition">
+                    🔄 Играть снова
+                </button>
+                <button onclick="exitToLobbyFromGameover()" class="w-full py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+                    В главное меню
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ИГРОВОЙ ДВИЖОК, ПРОГРЕСС И МУЛЬТИПЛЕЕР     -->
+    <!-- ========================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'seabattle-8x8-tg';
+        // Если вы захотите подключить свой личный Firebase проект, вставьте сюда ваш объект firebaseConfig
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        let db = null;
+        let auth = null;
+        let currentUserId = null;
+        let roomUnsubscribe = null;
+        let matchmakingUnsubscribe = null;
+
+        async function initCloudServices() {
+            if (!firebaseConfig) {
+                document.getElementById('online-status-label').textContent = 'Локальный режим';
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                currentUserId = tgId ? `tg_${tgId}` : (auth.currentUser?.uid || crypto.randomUUID());
+
+                await loadPlayerProgress();
+                document.getElementById('online-status-label').textContent = 'Облако подключено';
+            } catch (err) {
+                document.getElementById('online-status-label').textContent = 'Офлайн-режим';
+            }
+        }
+
+        async function loadPlayerProgress() {
+            if (!db || !currentUserId) return;
+            try {
+                const profileRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'profile', 'stats');
+                const snap = await getDoc(profileRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    state.user.level = data.level || 1;
+                    state.user.xp = data.xp || 0;
+                    state.user.coins = data.coins || 0;
+                    state.user.wins = data.wins || 0;
+                    if (data.code) state.user.code = data.code;
+                    if (Array.isArray(data.friends)) state.friends = data.friends;
+
+                    document.getElementById('my-friend-code').textContent = state.user.code;
+                    updateHeaderStats();
+                    renderFriendsLists();
+                } else {
+                    await savePlayerProgress();
+                }
+            } catch (e) {}
+        }
+
+        async function savePlayerProgress() {
+            if (!db || !currentUserId) return;
+            try {
+                const profileRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'profile', 'stats');
+                await setDoc(profileRef, {
+                    name: state.user.name,
+                    code: state.user.code,
+                    level: state.user.level,
+                    xp: state.user.xp,
+                    coins: state.user.coins,
+                    wins: state.user.wins,
+                    friends: state.friends,
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (e) {}
+        }
+
+        // ==========================================
+        // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP & СОСТОЯНИЯ
+        // ==========================================
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            try {
+                tg.setHeaderColor('#ffffff');
+                tg.setBackgroundColor('#f0f9ff');
+            } catch (e) {}
+        }
+
+        const GRID_SIZE = 8;
+        const SETUP_TIME_SECONDS = 60;
+
+        const FLEET_CONFIG = [
+            { size: 4, count: 1, name: 'Линкор (4)' },
+            { size: 3, count: 2, name: 'Крейсер (3)' },
+            { size: 2, count: 3, name: 'Эсминец (2)' },
+            { size: 1, count: 4, name: 'Катер (1)' }
+        ];
+
+        const RANKS = [
+            { minLevel: 1,  title: 'Юнга',               icon: '🛟' },
+            { minLevel: 5,  title: 'Матрос',             icon: '⚓' },
+            { minLevel: 10, title: 'Старшина',           icon: '🧭' },
+            { minLevel: 15, title: 'Мичман',             icon: '🔭' },
+            { minLevel: 20, title: 'Младший лейтенант',  icon: '🎖️' },
+            { minLevel: 25, title: 'Лейтенант',          icon: '⚔️' },
+            { minLevel: 30, title: 'Капитан-лейтенант',  icon: '🛡️' },
+            { minLevel: 40, title: 'Капитан 3-го ранга', icon: '🚢' },
+            { minLevel: 50, title: 'Капитан 1-го ранга', icon: '🦅' },
+            { minLevel: 65, title: 'Контр-адмирал',      icon: '⭐' },
+            { minLevel: 80, title: 'Адмирал Флота',      icon: '👑' }
+        ];
+
+        function getRankByLevel(level) {
+            let current = RANKS[0];
+            for (const r of RANKS) {
+                if (level >= r.minLevel) current = r;
+                else break;
+            }
+            return current;
+        }
+
+        function getRequiredXpForLevel(level) {
+            const tierBonus = Math.floor((level - 1) / 5) * 150;
+            return 120 + (level - 1) * 75 + tierBonus;
+        }
+
+        const state = {
+            user: {
+                name: tg?.initDataUnsafe?.user?.first_name || 'Капитан',
+                username: tg?.initDataUnsafe?.user?.username || 'captain_tg',
+                code: 'SB-' + Math.floor(1000 + Math.random() * 9000) + '-TG',
+                wins: 0,
+                level: 1,
+                xp: 0,
+                coins: 0
+            },
+            friends: [
+                { name: 'Алексей Морской', code: 'SB-4412-TG', online: true },
+                { name: 'Елена Шторм', code: 'SB-7890-TG', online: false }
+            ],
+            currentTab: 'ai',
+            gameMode: 'ai',
+            opponentName: 'ИИ Лейтенант',
+            aiDifficulty: 'medium',
+
+            roomCode: null,
+            playerRole: null,
+            isFleetSubmitted: false,
+            roomData: null,
+
+            setupTimerInterval: null,
+            setupSecondsLeft: SETUP_TIME_SECONDS,
+            selectedShipSize: 4,
+            isHorizontal: true,
+            playerBoard: [],
+            playerShips: [],
+
+            enemyBoard: [],
+            enemyShips: [],
+            enemyFog: [],
+            playerShotsLog: [],
+            isPlayerTurn: true,
+            isGameOver: false,
+            playerShots: 0,
+            playerHits: 0,
+            aiTargetsQueue: []
+        };
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('user-name').textContent = state.user.name;
+            document.getElementById('user-avatar').textContent = state.user.name.charAt(0).toUpperCase();
+            document.getElementById('my-friend-code').textContent = state.user.code;
+            updateHeaderStats();
+            renderFriendsLists();
+            await initCloudServices();
+
+            const startParam = tg?.initDataUnsafe?.start_param;
+            if (startParam && startParam.startsWith('ROOM_')) {
+                const codeFromLink = startParam.replace('ROOM_', '');
+                switchTab('friends');
+                document.getElementById('input-room-code').value = codeFromLink;
+                joinPrivateRoom();
+            }
+        });
+
+        function updateHeaderStats() {
+            const reqXp = getRequiredXpForLevel(state.user.level);
+            const pct = Math.min(100, Math.round((state.user.xp / reqXp) * 100));
+            const rank = getRankByLevel(state.user.level);
+
+            document.getElementById('user-level-badge').textContent = `${state.user.level} ур.`;
+            document.getElementById('user-rank-label').textContent = `${rank.icon} ${rank.title}`;
+            document.getElementById('xp-bar-fill').style.width = `${pct}%`;
+            document.getElementById('xp-text').textContent = `${state.user.xp}/${reqXp} XP`;
+            document.getElementById('user-coins').textContent = state.user.coins;
+        }
+
+        function showCoinsInfo() {
+            triggerHaptic('light');
+            const rank = getRankByLevel(state.user.level);
+            showToast(`${rank.icon} ${rank.title} (${state.user.level} ур.) • ${state.user.coins} 🪙`, '🪙');
+        }
+
+        let toastTimeout;
+        function showToast(text, icon = 'ℹ️') {
+            const container = document.getElementById('toast-container');
+            document.getElementById('toast-text').textContent = text;
+            container.querySelector('span').textContent = icon;
+            
+            container.classList.remove('opacity-0', '-translate-y-2');
+            container.classList.add('opacity-100', 'translate-y-0');
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                container.classList.remove('opacity-100', 'translate-y-0');
+                container.classList.add('opacity-0', '-translate-y-2');
+            }, 2800);
+        }
+
+        function triggerHaptic(type = 'light') {
+            if (tg?.HapticFeedback) {
+                if (['heavy', 'medium', 'light'].includes(type)) tg.HapticFeedback.impactOccurred(type);
+                else if (['success', 'error', 'warning'].includes(type)) tg.HapticFeedback.notificationOccurred(type);
+            }
+        }
+
+        // ==========================================
+        // 2. НАВИГАЦИЯ ПО ВКЛАДКАМ И МОДАЛЬНЫМ ОКНАМ
+        // ==========================================
+        function switchTab(tabName) {
+            state.currentTab = tabName;
+            triggerHaptic('light');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-sky-600', 'text-white', 'shadow-md', 'shadow-sky-600/20');
+                btn.classList.add('text-slate-500', 'hover:text-slate-800');
+            });
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.remove('text-slate-500', 'hover:text-slate-800');
+            activeBtn.classList.add('bg-sky-600', 'text-white', 'shadow-md', 'shadow-sky-600/20');
+
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+        }
+
+        function setAiDifficulty(diff) {
+            state.aiDifficulty = diff;
+            triggerHaptic('light');
+            ['easy', 'medium', 'hard'].forEach(lvl => {
+                const btn = document.getElementById(`diff-${lvl}`);
+                if (!btn) return;
+                btn.className = (lvl === diff)
+                    ? 'p-3 rounded-2xl border-2 border-sky-500 bg-sky-50/70 text-left transition flex items-center justify-between'
+                    : 'p-3 rounded-2xl border border-slate-200 bg-slate-50 text-left transition hover:border-slate-300 flex items-center justify-between';
+            });
+        }
+
+        function openFriendsModal() {
+            triggerHaptic('light');
+            document.getElementById('modal-friends').classList.remove('hidden');
+        }
+
+        function openRulesModal() {
+            triggerHaptic('light');
+            document.getElementById('modal-rules').classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // ==========================================
+        // 3. СИСТЕМА ДРУЗЕЙ ПО КОДУ
+        // ==========================================
+        function copyFriendCode() {
+            const tempInput = document.createElement('input');
+            tempInput.value = state.user.code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            triggerHaptic('success');
+            showToast('Код скопирован: ' + state.user.code, '📋');
+        }
+
+        function copyActiveRoomCode() {
+            if (!state.roomCode) return;
+            const tempInput = document.createElement('input');
+            tempInput.value = state.roomCode;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            triggerHaptic('success');
+            showToast('Код комнаты скопирован: ' + state.roomCode, '📋');
+        }
+
+        async function addFriendByCode() {
+            const input = document.getElementById('input-friend-code');
+            const code = input.value.trim().toUpperCase();
+            
+            if (!code || code.length < 4) {
+                triggerHaptic('error');
+                showToast('Введите корректный код друга', '⚠️');
+                return;
+            }
+            if (code === state.user.code) {
+                triggerHaptic('error');
+                showToast('Нельзя добавить самого себя', '⚠️');
+                return;
+            }
+            if (state.friends.some(f => f.code === code)) {
+                triggerHaptic('warning');
+                showToast('Этот капитан уже в списке друзей', 'ℹ️');
+                return;
+            }
+
+            const names = ['Дмитрий Флот', 'Анна Волна', 'Максим Корсар', 'Игорь Шкипер'];
+            const randomName = names[Math.floor(Math.random() * names.length)];
+            
+            state.friends.unshift({ name: randomName, code: code, online: true });
+            input.value = '';
+            renderFriendsLists();
+            await savePlayerProgress();
+            triggerHaptic('success');
+            showToast(`${randomName} добавлен в друзья!`, '✅');
+        }
+
+        function renderFriendsLists() {
+            const count = state.friends.length;
+            document.getElementById('friends-badge').textContent = count;
+            document.getElementById('modal-friends-count').textContent = count;
+
+            const modalList = document.getElementById('modal-friends-list');
+            const lobbyList = document.getElementById('lobby-friends-list');
+            modalList.innerHTML = '';
+            lobbyList.innerHTML = '';
+
+            state.friends.forEach(friend => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200/80';
+                item.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="relative w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center font-bold text-xs">
+                            ${friend.name.charAt(0)}
+                            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ${friend.online ? 'bg-emerald-500' : 'bg-slate-400'} ring-2 ring-white"></span>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-900">${friend.name}</div>
+                            <div class="text-[10px] font-mono text-slate-500">${friend.code}</div>
+                        </div>
+                    </div>
+                    <button onclick="challengeFriend('${friend.name}')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold active:scale-95 transition">
+                        Создать бой
+                    </button>
+                `;
+                modalList.appendChild(item);
+                lobbyList.appendChild(item.cloneNode(true));
+            });
+        }
+
+        function challengeFriend(friendName) {
+            closeModal('modal-friends');
+            createPrivateRoom(friendName);
+        }
+
+        function inviteViaTelegram() {
+            triggerHaptic('medium');
+            const roomPart = state.roomCode ? ` Код комнаты: ${state.roomCode}` : ` Мой код друга: ${state.user.code}`;
+            const shareText = `⚓ Вызываю тебя на дуэль в «Морской Бой 8×8»!${roomPart}`;
+            if (tg && tg.openTelegramLink) {
+                const url = `https://t.me/share/url?url=${encodeURIComponent('https://t.me')}&text=${encodeURIComponent(shareText)}`;
+                tg.openTelegramLink(url);
+            } else {
+                copyFriendCode();
+                showToast('Приглашение скопировано! Отправьте другу в чат', '✈️');
+            }
+        }
+
+        // ==========================================
+        // 3.5 РЕАЛЬНЫЙ МУЛЬТИПЛЕЕР (КОМНАТЫ И МАТЧМЕЙКИНГ В FIRESTORE)
+        // ==========================================
+        function cleanupRoomListeners() {
+            if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+            if (matchmakingUnsubscribe) { matchmakingUnsubscribe(); matchmakingUnsubscribe = null; }
+        }
+
+        async function findOnlineMatch() {
+            if (!db || !currentUserId) {
+                showToast('Облако недоступно, запуск тренировочного онлайн-боя', '🌐');
+                startSetup('online');
+                return;
+            }
+
+            triggerHaptic('medium');
+            document.getElementById('btn-find-online').classList.add('hidden');
+            document.getElementById('matchmaking-box').classList.remove('hidden');
+            document.getElementById('matchmaking-status').textContent = 'Поиск свободного капитана...';
+
+            const queueCol = collection(db, 'artifacts', appId, 'public', 'data', 'matchmaking');
+            let joinedExisting = false;
+
+            matchmakingUnsubscribe = onSnapshot(queueCol, async (snapshot) => {
+                if (joinedExisting) return;
+                const waitingDocs = snapshot.docs.filter(d => d.id !== currentUserId && d.data().status === 'waiting');
+                
+                if (waitingDocs.length > 0) {
+                    joinedExisting = true;
+                    const opponentDoc = waitingDocs[0];
+                    const oppData = opponentDoc.data();
+                    cleanupRoomListeners();
+
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matchmaking', opponentDoc.id));
+                    } catch (e) {}
+
+                    await joinRoomByCode(oppData.roomCode, 'online');
+                }
+            }, (err) => {});
+
+            setTimeout(async () => {
+                if (joinedExisting) return;
+                const code = String(Math.floor(1000 + Math.random() * 9000));
+                await createRoomInCloud(code, 'online');
+
+                const myQueueRef = doc(db, 'artifacts', appId, 'public', 'data', 'matchmaking', currentUserId);
+                await setDoc(myQueueRef, {
+                    userId: currentUserId,
+                    name: state.user.name,
+                    roomCode: code,
+                    status: 'waiting',
+                    createdAt: Date.now()
+                });
+
+                document.getElementById('matchmaking-status').textContent = 'Ожидаем подключения соперника...';
+            }, 600);
+        }
+
+        async function cancelOnlineMatchmaking() {
+            cleanupRoomListeners();
+            document.getElementById('matchmaking-box').classList.add('hidden');
+            document.getElementById('btn-find-online').classList.remove('hidden');
+            if (db && currentUserId) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matchmaking', currentUserId));
+                } catch (e) {}
+            }
+        }
+
+        async function createPrivateRoom(friendName = 'Друг') {
+            if (!db || !currentUserId) {
+                state.opponentName = friendName;
+                startSetup('friend');
+                return;
+            }
+            const code = String(Math.floor(1000 + Math.random() * 9000));
+            state.opponentName = friendName;
+            await createRoomInCloud(code, 'friend');
+            showToast(`Комната ${code} создана! Сообщите код другу`, '🔑');
+        }
+
+        async function joinPrivateRoom() {
+            const raw = document.getElementById('input-room-code').value.trim().toUpperCase();
+            if (!raw || raw.length < 4) {
+                triggerHaptic('error');
+                showToast('Введите 4-значный код комнаты', '⚠️');
+                return;
+            }
+            if (!db || !currentUserId) {
+                state.opponentName = 'Друг (' + raw + ')';
+                startSetup('friend');
+                return;
+            }
+            await joinRoomByCode(raw, 'friend');
+        }
+
+        async function createRoomInCloud(code, mode) {
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+            const initialRoom = {
+                code,
+                mode,
+                status: 'waiting_guest',
+                hostId: currentUserId,
+                hostName: state.user.name,
+                hostReady: false,
+                hostBoardJson: '',
+                hostShipsJson: '',
+                guestId: '',
+                guestName: 'Ожидание друга...',
+                guestReady: false,
+                guestBoardJson: '',
+                guestShipsJson: '',
+                turn: 'host',
+                shotsJson: '[]',
+                winner: '',
+                createdAt: Date.now()
+            };
+            await setDoc(roomRef, initialRoom);
+
+            state.roomCode = code;
+            state.playerRole = 'host';
+            state.isFleetSubmitted = false;
+
+            document.getElementById('matchmaking-box').classList.add('hidden');
+            document.getElementById('btn-find-online').classList.remove('hidden');
+
+            subscribeToRoom(code);
+            startSetup(mode);
+        }
+
+        async function joinRoomByCode(code, mode) {
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+            const snap = await getDoc(roomRef);
+
+            if (!snap.exists()) {
+                triggerHaptic('error');
+                showToast('Комната с кодом ' + code + ' не найдена', '❌');
+                return;
+            }
+
+            const data = snap.data();
+            if (data.guestId && data.guestId !== currentUserId) {
+                triggerHaptic('error');
+                showToast('Эта комната уже заполнена', '⚠️');
+                return;
+            }
+
+            await updateDoc(roomRef, {
+                guestId: currentUserId,
+                guestName: state.user.name,
+                status: 'setup'
+            });
+
+            state.roomCode = code;
+            state.playerRole = 'guest';
+            state.opponentName = data.hostName || 'Соперник';
+            state.isFleetSubmitted = false;
+
+            document.getElementById('matchmaking-box').classList.add('hidden');
+            document.getElementById('btn-find-online').classList.remove('hidden');
+
+            subscribeToRoom(code);
+            startSetup(mode);
+        }
+
+        function subscribeToRoom(code) {
+            cleanupRoomListeners();
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+
+            roomUnsubscribe = onSnapshot(roomRef, (snap) => {
+                if (!snap.exists()) return;
+                const room = snap.data();
+                state.roomData = room;
+
+                if (state.playerRole === 'host' && room.guestId) {
+                    state.opponentName = room.guestName || 'Соперник';
+                    document.getElementById('setup-mode-label').textContent = state.opponentName;
+                    document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+                }
+
+                if (room.hostReady && room.guestReady && !state.isGameOver) {
+                    if (document.getElementById('screen-battle').classList.contains('hidden')) {
+                        launchMultiplayerBattle(room);
+                    } else {
+                        syncMultiplayerBattleState(room);
+                    }
+                }
+            }, (err) => {});
+        }
+
+        // ==========================================
+        // 4. ЛОГИКА ПОЛЯ 8x8, РАССТАНОВКИ И ТАЙМЕРА 1 МИНУТА
+        // ==========================================
+        function createEmptyBoard() {
+            return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+        }
+
+        function startSetupTimer() {
+            stopSetupTimer();
+            state.setupSecondsLeft = SETUP_TIME_SECONDS;
+            updateSetupTimerUI();
+
+            state.setupTimerInterval = setInterval(() => {
+                state.setupSecondsLeft--;
+                updateSetupTimerUI();
+
+                if (state.setupSecondsLeft <= 0) {
+                    stopSetupTimer();
+                    if (state.playerShips.length < 10) {
+                        autoPlacePlayerShips();
+                        showToast('Время вышло! Флот расставлен автоматически', '⏱️');
+                    } else {
+                        showToast('Время вышло! Подтверждаем готовность!', '⚔️');
+                    }
+                    confirmFleetReady();
+                }
+            }, 1000);
+        }
+
+        function stopSetupTimer() {
+            if (state.setupTimerInterval) {
+                clearInterval(state.setupTimerInterval);
+                state.setupTimerInterval = null;
+            }
+        }
+
+        function updateSetupTimerUI() {
+            const mins = Math.floor(state.setupSecondsLeft / 60);
+            const secs = state.setupSecondsLeft % 60;
+            const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            
+            const display = document.getElementById('setup-timer-display');
+            const badge = document.getElementById('setup-timer-badge');
+            display.textContent = formatted;
+
+            if (state.setupSecondsLeft <= 10) {
+                badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 border border-rose-300 text-rose-700 font-mono text-xs font-extrabold animate-pulse';
+            } else {
+                badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100 border border-sky-200 text-sky-800 font-mono text-xs font-extrabold transition-colors';
+            }
+        }
+
+        function startSetup(mode) {
+            state.gameMode = mode;
+            state.isFleetSubmitted = false;
+            triggerHaptic('medium');
+
+            const label = document.getElementById('setup-mode-label');
+            const roomBanner = document.getElementById('multiplayer-setup-banner');
+
+            if (mode === 'ai') {
+                state.roomCode = null;
+                state.playerRole = null;
+                roomBanner.classList.add('hidden');
+                const diffNames = {
+                    easy: 'ИИ Матрос',
+                    medium: 'ИИ Лейтенант',
+                    hard: 'ИИ Адмирал Флота'
+                };
+                state.opponentName = diffNames[state.aiDifficulty] || 'ИИ Лейтенант';
+                label.textContent = state.opponentName;
+            } else {
+                label.textContent = state.opponentName;
+                if (state.roomCode) {
+                    roomBanner.classList.remove('hidden');
+                    document.getElementById('active-room-code-display').textContent = state.roomCode;
+                } else {
+                    roomBanner.classList.add('hidden');
+                }
+            }
+
+            document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-setup').classList.remove('hidden');
+
+            clearPlayerBoard();
+            autoPlacePlayerShips();
+            startSetupTimer();
+        }
+
+        function backToLobby() {
+            stopSetupTimer();
+            cleanupRoomListeners();
+            state.roomCode = null;
+            state.playerRole = null;
+            document.getElementById('screen-setup').classList.add('hidden');
+            document.getElementById('screen-lobby').classList.remove('hidden');
+        }
+
+        function clearPlayerBoard() {
+            state.playerBoard = createEmptyBoard();
+            state.playerShips = [];
+            state.selectedShipSize = 4;
+            renderSetupGrid();
+            renderShipDock();
+            updateSetupControls();
+        }
+
+        function toggleOrientation() {
+            state.isHorizontal = !state.isHorizontal;
+            document.getElementById('orientation-text').textContent = state.isHorizontal ? 'Гориз.' : 'Вертик.';
+            triggerHaptic('light');
+        }
+
+        function canPlaceShip(board, row, col, size, isHorizontal) {
+            for (let i = 0; i < size; i++) {
+                const r = isHorizontal ? row : row + i;
+                const c = isHorizontal ? col + i : col;
+
+                if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return false;
+
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                            if (board[nr][nc] !== null) return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeShipOnBoard(board, shipsList, row, col, size, isHorizontal) {
+            const shipId = 'ship_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            const cells = [];
+
+            for (let i = 0; i < size; i++) {
+                const r = isHorizontal ? row : row + i;
+                const c = isHorizontal ? col + i : col;
+                board[r][c] = { shipId, hit: false };
+                cells.push({ r, c });
+            }
+
+            shipsList.push({ id: shipId, size, cells, hits: 0, sunk: false });
+        }
+
+        function generateRandomFleet() {
+            let success = false;
+            let board, ships;
+
+            while (!success) {
+                board = createEmptyBoard();
+                ships = [];
+                success = true;
+
+                for (const group of FLEET_CONFIG) {
+                    for (let c = 0; c < group.count; c++) {
+                        let placed = false;
+                        let attempts = 0;
+                        while (!placed && attempts < 150) {
+                            const isHoriz = Math.random() < 0.5;
+                            const r = Math.floor(Math.random() * GRID_SIZE);
+                            const col = Math.floor(Math.random() * GRID_SIZE);
+
+                            if (canPlaceShip(board, r, col, group.size, isHoriz)) {
+                                placeShipOnBoard(board, ships, r, col, group.size, isHoriz);
+                                placed = true;
+                            }
+                            attempts++;
+                        }
+                        if (!placed) { success = false; break; }
+                    }
+                    if (!success) break;
+                }
+            }
+            return { board, ships };
+        }
+
+        function autoPlacePlayerShips() {
+            if (state.isFleetSubmitted) return;
+            const generated = generateRandomFleet();
+            state.playerBoard = generated.board;
+            state.playerShips = generated.ships;
+            state.selectedShipSize = null;
+            triggerHaptic('medium');
+            renderSetupGrid();
+            renderShipDock();
+            updateSetupControls();
+        }
+
+        function renderSetupGrid() {
+            const wrapper = document.getElementById('setup-grid-wrapper');
+            wrapper.innerHTML = '';
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'flex items-center justify-center text-[10px] font-mono font-bold text-slate-400';
+                rowLabel.textContent = r + 1;
+                wrapper.appendChild(rowLabel);
+
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    const hasShip = state.playerBoard[r][c] !== null;
+                    
+                    cell.className = `grid-cell rounded-md border cursor-pointer ${
+                        hasShip ? 'cell-ship' : 'bg-white border-sky-200/90 hover:border-sky-400'
+                    }`;
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+
+                    cell.addEventListener('click', () => handleSetupCellClick(r, c));
+                    cell.addEventListener('mouseenter', () => previewShipPlacement(r, c, true));
+                    cell.addEventListener('mouseleave', () => previewShipPlacement(r, c, false));
+
+                    wrapper.appendChild(cell);
+                }
+            }
+        }
+
+        function previewShipPlacement(row, col, show) {
+            document.querySelectorAll('#setup-grid-wrapper .grid-cell').forEach(el => {
+                el.classList.remove('cell-preview-valid', 'cell-preview-invalid');
+            });
+
+            if (!show || !state.selectedShipSize || state.isFleetSubmitted) return;
+
+            const isValid = canPlaceShip(state.playerBoard, row, col, state.selectedShipSize, state.isHorizontal);
+            for (let i = 0; i < state.selectedShipSize; i++) {
+                const r = state.isHorizontal ? row : row + i;
+                const c = state.isHorizontal ? col + i : col;
+                if (r < GRID_SIZE && c < GRID_SIZE) {
+                    const cellEl = document.querySelector(`#setup-grid-wrapper .grid-cell[data-r="${r}"][data-c="${c}"]`);
+                    if (cellEl) cellEl.classList.add(isValid ? 'cell-preview-valid' : 'cell-preview-invalid');
+                }
+            }
+        }
+
+        function handleSetupCellClick(r, c) {
+            if (state.isFleetSubmitted) return;
+            const existingCell = state.playerBoard[r][c];
+            
+            if (existingCell) {
+                const shipIndex = state.playerShips.findIndex(s => s.id === existingCell.shipId);
+                if (shipIndex !== -1) {
+                    const removedShip = state.playerShips[shipIndex];
+                    removedShip.cells.forEach(pos => { state.playerBoard[pos.r][pos.c] = null; });
+                    state.playerShips.splice(shipIndex, 1);
+                    state.selectedShipSize = removedShip.size;
+                    triggerHaptic('light');
+                    renderSetupGrid();
+                    renderShipDock();
+                    updateSetupControls();
+                }
+                return;
+            }
+
+            if (!state.selectedShipSize) {
+                showToast('Все корабли расставлены! Нажмите на корабль, чтобы убрать его.', 'ℹ️');
+                return;
+            }
+
+            if (canPlaceShip(state.playerBoard, r, c, state.selectedShipSize, state.isHorizontal)) {
+                placeShipOnBoard(state.playerBoard, state.playerShips, r, c, state.selectedShipSize, state.isHorizontal);
+                triggerHaptic('medium');
+
+                const placedOfThisSize = state.playerShips.filter(s => s.size === state.selectedShipSize).length;
+                const maxOfThisSize = FLEET_CONFIG.find(f => f.size === state.selectedShipSize).count;
+                
+                if (placedOfThisSize >= maxOfThisSize) {
+                    const nextAvailable = FLEET_CONFIG.find(f => {
+                        const count = state.playerShips.filter(s => s.size === f.size).length;
+                        return count < f.count;
+                    });
+                    state.selectedShipSize = nextAvailable ? nextAvailable.size : null;
+                }
+
+                renderSetupGrid();
+                renderShipDock();
+                updateSetupControls();
+            } else {
+                triggerHaptic('error');
+                showToast('Нельзя ставить корабли вплотную или за край поля!', '⚠️');
+            }
+        }
+
+        function renderShipDock() {
+            const dock = document.getElementById('ship-dock');
+            dock.innerHTML = '';
+
+            FLEET_CONFIG.forEach(group => {
+                const placedCount = state.playerShips.filter(s => s.size === group.size).length;
+                const remaining = group.count - placedCount;
+                const isSelected = state.selectedShipSize === group.size && remaining > 0;
+
+                const btn = document.createElement('button');
+                btn.disabled = remaining === 0;
+                btn.className = `p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                    remaining === 0 
+                        ? 'bg-slate-50 border-slate-200 opacity-40 cursor-not-allowed' 
+                        : isSelected 
+                            ? 'bg-sky-50 border-sky-500 shadow-xs' 
+                            : 'bg-white border-slate-200 hover:border-sky-300'
+                }`;
+
+                let decksHtml = '<div class="flex gap-0.5">';
+                for (let i = 0; i < group.size; i++) {
+                    decksHtml += `<span class="w-2.5 h-2.5 rounded-xs ${remaining > 0 ? 'bg-sky-500' : 'bg-slate-400'}"></span>`;
+                }
+                decksHtml += '</div>';
+
+                btn.innerHTML = `${decksHtml}<span class="text-[11px] font-extrabold text-slate-700">×${remaining}</span>`;
+
+                btn.onclick = () => {
+                    state.selectedShipSize = group.size;
+                    triggerHaptic('light');
+                    renderShipDock();
+                };
+
+                dock.appendChild(btn);
+            });
+        }
+
+        function updateSetupControls() {
+            const totalPlaced = state.playerShips.length;
+            document.getElementById('ships-counter').textContent = `${totalPlaced} / 10`;
+
+            const startBtn = document.getElementById('btn-start-battle');
+            if (state.isFleetSubmitted) {
+                startBtn.disabled = true;
+                startBtn.className = 'w-full py-4 rounded-2xl bg-indigo-100 text-indigo-800 border border-indigo-200 font-extrabold text-sm flex items-center justify-center gap-2';
+                startBtn.innerHTML = '<span>⏳ Ждём готовности соперника...</span>';
+                return;
+            }
+
+            if (totalPlaced === 10) {
+                startBtn.disabled = false;
+                startBtn.className = 'w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98] text-white font-extrabold text-sm shadow-lg shadow-emerald-500/25 transition flex items-center justify-center gap-2 cursor-pointer';
+                startBtn.innerHTML = '<span>⚔️ Начать сражение!</span>';
+            } else {
+                startBtn.disabled = true;
+                startBtn.className = 'w-full py-4 rounded-2xl bg-slate-200 text-slate-400 font-extrabold text-sm transition flex items-center justify-center gap-2 cursor-not-allowed';
+                startBtn.innerHTML = `<span>Расставьте ещё ${10 - totalPlaced} кор.</span>`;
+            }
+        }
+
+        async function confirmFleetReady() {
+            if (state.playerShips.length !== 10) return;
+            stopSetupTimer();
+
+            if (state.roomCode && db && state.playerRole) {
+                state.isFleetSubmitted = true;
+                updateSetupControls();
+                triggerHaptic('medium');
+
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.roomCode);
+                const updatePayload = state.playerRole === 'host'
+                    ? {
+                        hostReady: true,
+                        hostBoardJson: JSON.stringify(state.playerBoard),
+                        hostShipsJson: JSON.stringify(state.playerShips)
+                    }
+                    : {
+                        guestReady: true,
+                        guestBoardJson: JSON.stringify(state.playerBoard),
+                        guestShipsJson: JSON.stringify(state.playerShips)
+                    };
+
+                await updateDoc(roomRef, updatePayload);
+                return;
+            }
+
+            startLocalBattle();
+        }
+
+        // ==========================================
+        // 5. ИГРОВОЙ ПРОЦЕСС И БОЕВАЯ СИСТЕМА
+        // ==========================================
+        function startLocalBattle() {
+            triggerHaptic('heavy');
+            const enemyFleet = generateRandomFleet();
+            state.enemyBoard = enemyFleet.board;
+            state.enemyShips = enemyFleet.ships;
+
+            state.enemyFog = createEmptyBoard();
+            state.playerShotsLog = createEmptyBoard();
+
+            state.isPlayerTurn = true;
+            state.isGameOver = false;
+            state.playerShots = 0;
+            state.playerHits = 0;
+            state.aiTargetsQueue = [];
+
+            document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+            document.getElementById('screen-setup').classList.add('hidden');
+            document.getElementById('screen-battle').classList.remove('hidden');
+
+            updateBattleUI();
+            renderEnemyGrid();
+            renderMiniPlayerGrid();
+        }
+
+        function launchMultiplayerBattle(room) {
+            triggerHaptic('heavy');
+            const isHost = state.playerRole === 'host';
+            state.enemyBoard = JSON.parse(isHost ? room.guestBoardJson : room.hostBoardJson);
+            state.enemyShips = JSON.parse(isHost ? room.guestShipsJson : room.hostShipsJson);
+            state.opponentName = isHost ? (room.guestName || 'Соперник') : (room.hostName || 'Соперник');
+
+            state.enemyFog = createEmptyBoard();
+            state.playerShotsLog = createEmptyBoard();
+
+            state.isPlayerTurn = (room.turn === state.playerRole);
+            state.isGameOver = false;
+            state.playerShots = 0;
+            state.playerHits = 0;
+
+            document.getElementById('enemy-name-label').textContent = state.opponentName + ':';
+            document.getElementById('screen-setup').classList.add('hidden');
+            document.getElementById('screen-battle').classList.remove('hidden');
+
+            syncMultiplayerBattleState(room);
+        }
+
+        function syncMultiplayerBattleState(room) {
+            if (state.isGameOver) return;
+
+            const shots = JSON.parse(room.shotsJson || '[]');
+            const myRole = state.playerRole;
+
+            state.enemyFog = createEmptyBoard();
+            state.playerShotsLog = createEmptyBoard();
+            state.enemyShips.forEach(s => { s.hits = 0; s.sunk = false; });
+            state.playerShips.forEach(s => { s.hits = 0; s.sunk = false; });
+
+            let myShotsCount = 0;
+            let myHitsCount = 0;
+
+            shots.forEach(shot => {
+                if (shot.shooter === myRole) {
+                    myShotsCount++;
+                    const targetCell = state.enemyBoard[shot.r][shot.c];
+                    if (targetCell) {
+                        myHitsCount++;
+                        state.enemyFog[shot.r][shot.c] = 'hit';
+                        const ship = state.enemyShips.find(s => s.id === targetCell.shipId);
+                        if (ship) {
+                            ship.hits++;
+                            if (ship.hits === ship.size) {
+                                ship.sunk = true;
+                                markShipAsSunk(ship, state.enemyFog);
+                            }
+                        }
+                    } else {
+                        state.enemyFog[shot.r][shot.c] = 'miss';
+                    }
+                } else {
+                    const myCell = state.playerBoard[shot.r][shot.c];
+                    if (myCell) {
+                        state.playerShotsLog[shot.r][shot.c] = 'hit';
+                        const ship = state.playerShips.find(s => s.id === myCell.shipId);
+                        if (ship) {
+                            ship.hits++;
+                            if (ship.hits === ship.size) {
+                                ship.sunk = true;
+                                ship.cells.forEach(pos => {
+                                    for (let dr = -1; dr <= 1; dr++) {
+                                        for (let dc = -1; dc <= 1; dc++) {
+                                            const nr = pos.r + dr;
+                                            const nc = pos.c + dc;
+                                            if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE && state.playerShotsLog[nr][nc] === null) {
+                                                state.playerShotsLog[nr][nc] = 'miss';
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    } else {
+                        state.playerShotsLog[shot.r][shot.c] = 'miss';
+                    }
+                }
+            });
+
+            state.playerShots = myShotsCount;
+            state.playerHits = myHitsCount;
+            state.isPlayerTurn = (room.turn === myRole);
+
+            renderEnemyGrid();
+            renderMiniPlayerGrid();
+            updateBattleUI();
+
+            if (room.winner) {
+                endGame(room.winner === myRole);
+            } else if (state.enemyShips.every(s => s.sunk)) {
+                endGame(true);
+            } else if (state.playerShips.every(s => s.sunk)) {
+                endGame(false);
+            }
+        }
+
+        function updateBattleUI() {
+            const turnText = document.getElementById('turn-text');
+            const indicator = document.getElementById('turn-indicator');
+
+            if (state.isPlayerTurn) {
+                turnText.textContent = 'Ваш ход! Стреляйте';
+                turnText.className = 'text-sm font-extrabold text-emerald-600';
+                indicator.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-ping';
+            } else {
+                turnText.textContent = `Ходит ${state.opponentName}...`;
+                turnText.className = 'text-sm font-extrabold text-amber-600';
+                indicator.className = 'w-3 h-3 rounded-full bg-amber-500 animate-pulse';
+            }
+
+            const playerAlive = state.playerShips.filter(s => !s.sunk).length;
+            const enemyAlive = state.enemyShips.filter(s => !s.sunk).length;
+
+            document.getElementById('player-ships-left').textContent = `${playerAlive} из 10`;
+            document.getElementById('enemy-ships-left').textContent = `${enemyAlive} из 10`;
+        }
+
+        function renderEnemyGrid() {
+            const wrapper = document.getElementById('enemy-grid-wrapper');
+            wrapper.innerHTML = '';
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'flex items-center justify-center text-[10px] font-mono font-bold text-slate-400';
+                rowLabel.textContent = r + 1;
+                wrapper.appendChild(rowLabel);
+
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    const status = state.enemyFog[r][c];
+                    
+                    let classes = 'grid-cell rounded-md border ';
+                    if (status === null) {
+                        classes += 'bg-white border-sky-200/90 hover:border-rose-400 cursor-pointer shadow-2xs';
+                    } else if (status === 'miss') {
+                        classes += 'bg-slate-100 border-slate-200 cell-miss';
+                    } else if (status === 'hit') {
+                        classes += 'cell-hit';
+                    } else if (status === 'sunk') {
+                        classes += 'cell-hit cell-sunk';
+                    }
+
+                    cell.className = classes;
+                    if (status === null && state.isPlayerTurn && !state.isGameOver) {
+                        cell.addEventListener('click', () => handlePlayerShot(r, c));
+                    }
+
+                    wrapper.appendChild(cell);
+                }
+            }
+        }
+
+        function renderMiniPlayerGrid() {
+            const mini = document.getElementById('mini-player-grid');
+            mini.innerHTML = '';
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    const shipCell = state.playerBoard[r][c];
+                    const shotStatus = state.playerShotsLog[r][c];
+
+                    let bg = 'bg-white border border-sky-100';
+                    if (shipCell) bg = 'bg-sky-500';
+                    if (shotStatus === 'miss') bg = 'bg-slate-300';
+                    if (shotStatus === 'hit') bg = 'bg-rose-500';
+
+                    cell.className = `rounded-[2px] ${bg}`;
+                    mini.appendChild(cell);
+                }
+            }
+        }
+
+        async function handlePlayerShot(r, c) {
+            if (!state.isPlayerTurn || state.isGameOver || state.enemyFog[r][c] !== null) return;
+
+            if (state.roomCode && db && state.roomData) {
+                state.isPlayerTurn = false;
+                const targetCell = state.enemyBoard[r][c];
+                const isHit = Boolean(targetCell);
+                const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
+                const coordStr = `${letters[c]}${r + 1}`;
+
+                triggerHaptic(isHit ? 'heavy' : 'light');
+                document.getElementById('last-action-log').textContent = isHit ? `${coordStr}: Попадание!` : `${coordStr}: Мимо`;
+
+                const existingShots = JSON.parse(state.roomData.shotsJson || '[]');
+                existingShots.push({ shooter: state.playerRole, r, c });
+
+                const totalEnemyDecks = 20;
+                const myTotalHitsAfter = existingShots.filter(s => s.shooter === state.playerRole && state.enemyBoard[s.r][s.c]).length;
+                const wonNow = myTotalHitsAfter >= totalEnemyDecks;
+
+                const nextTurn = isHit ? state.playerRole : (state.playerRole === 'host' ? 'guest' : 'host');
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.roomCode);
+
+                await updateDoc(roomRef, {
+                    shotsJson: JSON.stringify(existingShots),
+                    turn: nextTurn,
+                    winner: wonNow ? state.playerRole : ''
+                });
+                return;
+            }
+
+            state.playerShots++;
+            const targetCell = state.enemyBoard[r][c];
+            const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'];
+            const coordStr = `${letters[c]}${r + 1}`;
+
+            if (targetCell) {
+                state.playerHits++;
+                targetCell.hit = true;
+                state.enemyFog[r][c] = 'hit';
+                triggerHaptic('heavy');
+
+                const ship = state.enemyShips.find(s => s.id === targetCell.shipId);
+                ship.hits++;
+
+                if (ship.hits === ship.size) {
+                    ship.sunk = true;
+                    markShipAsSunk(ship, state.enemyFog);
+                    document.getElementById('last-action-log').textContent = `${coordStr}: Потоплен! 🔥`;
+                    showToast(`Корабль (${ship.size}-палубный) потоплен!`, '💥');
+                } else {
+                    document.getElementById('last-action-log').textContent = `${coordStr}: Ранен! Ваш ход`;
+                }
+
+                renderEnemyGrid();
+                updateBattleUI();
+
+                if (state.enemyShips.every(s => s.sunk)) {
+                    endGame(true);
+                }
+            } else {
+                state.enemyFog[r][c] = 'miss';
+                document.getElementById('last-action-log').textContent = `${coordStr}: Мимо`;
+                triggerHaptic('light');
+
+                state.isPlayerTurn = false;
+                renderEnemyGrid();
+                updateBattleUI();
+
+                setTimeout(executeOpponentTurn, 850);
+            }
+        }
+
+        function markShipAsSunk(ship, fogBoard) {
+            ship.cells.forEach(({ r, c }) => {
+                fogBoard[r][c] = 'sunk';
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                            if (fogBoard[nr][nc] === null) fogBoard[nr][nc] = 'miss';
+                        }
+                    }
+                }
+            });
+        }
+
+        function executeOpponentTurn() {
+            if (state.isGameOver) return;
+
+            let r, c;
+            while (state.aiTargetsQueue.length > 0) {
+                const candidate = state.aiTargetsQueue.shift();
+                if (state.playerShotsLog[candidate.r][candidate.c] === null) {
+                    r = candidate.r;
+                    c = candidate.c;
+                    break;
+                }
+            }
+
+            if (r === undefined) {
+                const available = [];
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        if (state.playerShotsLog[i][j] === null) {
+                            if (state.aiDifficulty === 'hard' && (i + j) % 2 === 0) {
+                                available.push({ r: i, c: j }, { r: i, c: j });
+                            } else {
+                                available.push({ r: i, c: j });
+                            }
+                        }
+                    }
+                }
+                const choice = available[Math.floor(Math.random() * available.length)];
+                r = choice.r;
+                c = choice.c;
+            }
+
+            const playerCell = state.playerBoard[r][c];
+            if (playerCell) {
+                state.playerShotsLog[r][c] = 'hit';
+                triggerHaptic('warning');
+
+                const ship = state.playerShips.find(s => s.id === playerCell.shipId);
+                ship.hits++;
+
+                if (ship.hits === ship.size) {
+                    ship.sunk = true;
+                    state.aiTargetsQueue = [];
+                    ship.cells.forEach(pos => {
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                const nr = pos.r + dr;
+                                const nc = pos.c + dc;
+                                if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE && state.playerShotsLog[nr][nc] === null) {
+                                    state.playerShotsLog[nr][nc] = 'miss';
+                                }
+                            }
+                        }
+                    });
+                    showToast('Противник потопил ваш корабль!', '⚠️');
+                } else {
+                    if (state.aiDifficulty !== 'easy' || Math.random() < 0.5) {
+                        const neighbors = [
+                            { r: r - 1, c }, { r: r + 1, c },
+                            { r, c: c - 1 }, { r, c: c + 1 }
+                        ].filter(n => n.r >= 0 && n.r < GRID_SIZE && n.c >= 0 && n.c < GRID_SIZE && state.playerShotsLog[n.r][n.c] === null);
+                        state.aiTargetsQueue.push(...neighbors);
+                    }
+                }
+
+                renderMiniPlayerGrid();
+                updateBattleUI();
+
+                if (state.playerShips.every(s => s.sunk)) {
+                    endGame(false);
+                } else {
+                    setTimeout(executeOpponentTurn, 850);
+                }
+            } else {
+                state.playerShotsLog[r][c] = 'miss';
+                state.isPlayerTurn = true;
+                renderMiniPlayerGrid();
+                renderEnemyGrid();
+                updateBattleUI();
+            }
+        }
+
+        // ==========================================
+        // 6. ЗАВЕРШЕНИЕ ИГРЫ, НАЧИСЛЕНИЕ XP И СОХРАНЕНИЕ В ОБЛАКО
+        // ==========================================
+        function confirmSurrender() {
+            document.getElementById('modal-surrender').classList.remove('hidden');
+        }
+
+        async function surrenderGame() {
+            closeModal('modal-surrender');
+            if (state.roomCode && db && state.playerRole) {
+                const oppRole = state.playerRole === 'host' ? 'guest' : 'host';
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', state.roomCode), {
+                        winner: oppRole
+                    });
+                } catch (e) {}
+            }
+            endGame(false);
+        }
+
+        async function endGame(isVictory) {
+            if (state.isGameOver) return;
+            state.isGameOver = true;
+            cleanupRoomListeners();
+            triggerHaptic(isVictory ? 'success' : 'error');
+
+            const accuracy = state.playerShots > 0 ? Math.round((state.playerHits / state.playerShots) * 100) : 0;
+
+            let earnedXp = isVictory ? 70 : 25;
+            if (isVictory) {
+                if (state.gameMode === 'online' || state.gameMode === 'friend') {
+                    earnedXp += 20;
+                } else if (state.gameMode === 'ai') {
+                    if (state.aiDifficulty === 'medium') earnedXp += 10;
+                    if (state.aiDifficulty === 'hard') earnedXp += 25;
+                }
+            }
+            earnedXp += Math.round(accuracy * 0.2);
+
+            if (isVictory) state.user.wins++;
+
+            const oldRank = getRankByLevel(state.user.level);
+
+            state.user.xp += earnedXp;
+            let levelsGained = 0;
+            let coinsEarnedTotal = 0;
+
+            while (state.user.xp >= getRequiredXpForLevel(state.user.level)) {
+                state.user.xp -= getRequiredXpForLevel(state.user.level);
+                state.user.level++;
+                levelsGained++;
+
+                const coinReward = (state.user.level % 10 === 0) ? 100 : 25;
+                state.user.coins += coinReward;
+                coinsEarnedTotal += coinReward;
+            }
+
+            const newRank = getRankByLevel(state.user.level);
+
+            updateHeaderStats();
+            await savePlayerProgress();
+
+            document.getElementById('gameover-emoji').textContent = isVictory ? '🏆' : '⚓';
+            document.getElementById('gameover-title').textContent = isVictory ? 'Победа!' : 'Поражение';
+            document.getElementById('gameover-title').className = `text-2xl font-extrabold mb-1 ${isVictory ? 'text-emerald-600' : 'text-rose-600'}`;
+            document.getElementById('gameover-subtitle').textContent = isVictory 
+                ? `Вы разгромили флот (${state.opponentName})!` 
+                : 'Ваш флот был уничтожен. Попробуйте новую тактику!';
+
+            const reqXpNow = getRequiredXpForLevel(state.user.level);
+            const pctNow = Math.min(100, Math.round((state.user.xp / reqXpNow) * 100));
+
+            document.getElementById('reward-xp-earned').textContent = `+${earnedXp} XP`;
+            document.getElementById('reward-xp-bar').style.width = `${pctNow}%`;
+            document.getElementById('reward-level-label').textContent = `${newRank.icon} ${newRank.title} (${state.user.level} ур.)`;
+            document.getElementById('reward-xp-progress').textContent = `${state.user.xp} / ${reqXpNow} XP`;
+
+            const levelupBanner = document.getElementById('levelup-banner');
+            const rankupText = document.getElementById('rankup-text');
+            if (levelsGained > 0) {
+                levelupBanner.classList.remove('hidden');
+                document.getElementById('reward-coins-earned').textContent = `+${coinsEarnedTotal} 🪙`;
+                if (newRank.title !== oldRank.title) {
+                    rankupText.classList.remove('hidden');
+                    rankupText.textContent = `🎖️ Новое звание: ${newRank.icon} ${newRank.title}!`;
+                } else {
+                    rankupText.classList.add('hidden');
+                }
+            } else {
+                levelupBanner.classList.add('hidden');
+                rankupText.classList.add('hidden');
+            }
+            
+            document.getElementById('stat-shots').textContent = state.playerShots;
+            document.getElementById('stat-accuracy').textContent = accuracy + '%';
+
+            document.getElementById('modal-gameover').classList.remove('hidden');
+        }
+
+        function playAgain() {
+            closeModal('modal-gameover');
+            document.getElementById('screen-battle').classList.add('hidden');
+            if (state.roomCode) {
+                state.roomCode = null;
+                document.getElementById('screen-lobby').classList.remove('hidden');
+            } else {
+                startSetup(state.gameMode);
+            }
+        }
+
+        function exitToLobbyFromGameover() {
+            closeModal('modal-gameover');
+            state.roomCode = null;
+            document.getElementById('screen-battle').classList.add('hidden');
+            document.getElementById('screen-lobby').classList.remove('hidden');
+        }
+
+        Object.assign(window, {
+            switchTab,
+            setAiDifficulty,
+            openFriendsModal,
+            openRulesModal,
+            closeModal,
+            showCoinsInfo,
+            copyFriendCode,
+            copyActiveRoomCode,
+            addFriendByCode,
+            challengeFriend,
+            inviteViaTelegram,
+            findOnlineMatch,
+            cancelOnlineMatchmaking,
+            createPrivateRoom,
+            joinPrivateRoom,
+            startSetup,
+            backToLobby,
+            clearPlayerBoard,
+            toggleOrientation,
+            autoPlacePlayerShips,
+            confirmFleetReady,
+            confirmSurrender,
+            surrenderGame,
+            playAgain,
+            exitToLobbyFromGameover
+        });
+    </script>
+</body>
+</html>
