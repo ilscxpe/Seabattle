@@ -799,10 +799,10 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import {
             getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
-            onSnapshot, collection, query, where, getDocs, runTransaction
+            onSnapshot, collection, query, where, getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Вшитая конфигурация вашего проекта Firebase (sea-battle-497a9)
+        // Конфигурация Firebase проекта sea-battle-497a9
         const firebaseConfig = {
             apiKey: "AIzaSyBAMlYXL5Vpw_LBs4WJo4lGKZa39n0B7kE",
             authDomain: "sea-battle-497a9.firebaseapp.com",
@@ -818,226 +818,7 @@
         let cloudInitPromise = null;
 
         // ==========================================
-        // ЕДИНЫЙ РЕЕСТР ТАЙМЕРОВ И ПОДПИСОК (БЕЗ ЗАСТЫВАНИЙ)
-        // ==========================================
-        const transitionTimeouts = new Set();
-        let roomUnsubscribe = null;
-        let matchmakingUnsubscribe = null;
-        let queueMonitorUnsubscribe = null;
-        let searchIntervalId = null;
-
-        function registerTransitionTimeout(fn, delay) {
-            const id = setTimeout(() => {
-                transitionTimeouts.delete(id);
-                fn();
-            }, delay);
-            transitionTimeouts.add(id);
-            return id;
-        }
-
-        function clearTransitionTimeouts() {
-            transitionTimeouts.forEach(id => clearTimeout(id));
-            transitionTimeouts.clear();
-        }
-
-        function clearSetupTimer() {
-            if (state.setupTimerInterval) {
-                clearInterval(state.setupTimerInterval);
-                state.setupTimerInterval = null;
-            }
-        }
-
-        function clearTurnTimer() {
-            if (state.turnTimerInterval) {
-                clearInterval(state.turnTimerInterval);
-                state.turnTimerInterval = null;
-            }
-        }
-
-        function clearSearchTimer() {
-            if (searchIntervalId) {
-                clearInterval(searchIntervalId);
-                searchIntervalId = null;
-            }
-        }
-
-        function clearInputWatchdog() {
-            if (state.inputWatchdogTimeout) {
-                clearTimeout(state.inputWatchdogTimeout);
-                state.inputWatchdogTimeout = null;
-            }
-        }
-
-        function clearAllTimers() {
-            clearTransitionTimeouts();
-            clearSetupTimer();
-            clearTurnTimer();
-            clearSearchTimer();
-            clearInputWatchdog();
-        }
-
-        function cleanupRoomListeners() {
-            if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
-            if (matchmakingUnsubscribe) { matchmakingUnsubscribe(); matchmakingUnsubscribe = null; }
-        }
-
-        function resetMatchState() {
-            clearAllTimers();
-            state.isGameOver = false;
-            state.isInputLocked = false;
-            state.isFleetSubmitted = false;
-            state.lastProcessedShotsCount = 0;
-            state.roomData = null;
-        }
-
-        // Постоянный идентификатор игрока (привязка к Telegram ID для синхронизации между устройствами)
-        const LOCAL_PROFILE_KEY = 'seabattle_profile_v2';
-        const LOCAL_UID_KEY = 'seabattle_persistent_uid_v2';
-
-        function resolvePersistentUserId() {
-            const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-            if (tgUser?.id) {
-                return `tg_${tgUser.id}`;
-            }
-            let savedUid = localStorage.getItem(LOCAL_UID_KEY);
-            if (!savedUid) {
-                savedUid = 'web_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36).slice(-4);
-                localStorage.setItem(LOCAL_UID_KEY, savedUid);
-            }
-            return savedUid;
-        }
-
-        function generateStableFriendCode(uid) {
-            let hash = 0;
-            for (let i = 0; i < uid.length; i++) {
-                hash = ((hash << 5) - hash) + uid.charCodeAt(i);
-                hash |= 0;
-            }
-            const num = String(Math.abs(hash) % 9000 + 1000);
-            return `SB-${num}-TG`;
-        }
-
-        function loadLocalFallback() {
-            try {
-                const raw = localStorage.getItem(LOCAL_PROFILE_KEY);
-                if (!raw) return;
-                const data = JSON.parse(raw);
-                state.user.level = data.level || 1;
-                state.user.xp = data.xp || 0;
-                state.user.coins = data.coins || 0;
-        function initCloudServices() {
-            if (cloudInitPromise) return cloudInitPromise;
-
-            cloudInitPromise = (async () => {
-                currentUserId = resolvePersistentUserId();
-                state.user.code = generateStableFriendCode(currentUserId);
-                loadLocalFallback();
-
-                document.getElementById('my-friend-code').textContent = state.user.code;
-                updateHeaderStats();
-                renderFriendsLists();
-
-                try {
-                    const app = initializeApp(firebaseConfig);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
-
-                    await signInAnonymously(auth);
-                    // Удаляем любую зависшую заявку поиска от прошлой сессии
-                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
-
-                    await loadPlayerProgress();
-                    startLiveQueueMonitor();
-
-                    const dot = document.getElementById('cloud-status-dot');
-                    dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-                    document.getElementById('online-status-label').textContent = 'В сети';
-                    return true;
-                } catch (err) {
-                    console.warn('Ошибка подключения Firebase:', err);
-                    const dot = document.getElementById('cloud-status-dot');
-                    dot.className = 'w-2 h-2 rounded-full bg-rose-500';
-                    document.getElementById('online-status-label').textContent = 'Не в сети';
-                    return false;
-                }
-            })();
-
-            return cloudInitPromise;
-        }
-
-        async function ensureCloudReady() {
-            await initCloudServices();
-            if (auth && !auth.currentUser) {
-                try { await signInAnonymously(auth); } catch (e) {}
-            }
-            return Boolean(db && currentUserId && (!auth || auth.currentUser));
-        }
-
-        async function loadPlayerProgress() {
-            if (!db || !currentUserId) return;
-            try {
-                const captainRef = doc(db, 'captains', currentUserId);
-                const snap = await getDoc(captainRef);
-                if (snap.exists()) {
-                    const data = snap.data();
-                    state.user.level = data.level || 1;
-                    state.user.xp = data.xp || 0;
-                    state.user.coins = data.coins || 0;
-                    state.user.wins = data.wins || 0;
-                    if (data.code) state.user.code = data.code;
-                    if (Array.isArray(data.friends)) state.friends = data.friends;
-
-                    saveLocalFallback();
-                    document.getElementById('my-friend-code').textContent = state.user.code;
-                    updateHeaderStats();
-                    renderFriendsLists();
-                }
-                await savePlayerProgress();
-            } catch (e) {
-        // Мониторинг реальных игроков в очереди (только активные за последние 8 сек)
-        function startLiveQueueMonitor() {
-            if (!db || queueMonitorUnsubscribe) return;
-            const qCol = collection(db, 'matchmaking');
-            queueMonitorUnsubscribe = onSnapshot(qCol, (snap) => {
-                const now = Date.now();
-                const realActive = snap.docs.filter(d => {
-                    const data = d.data();
-                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 8000);
-                });
-                const countEl = document.getElementById('live-queue-count');
-                if (countEl) countEl.textContent = String(realActive.length);
-            }, () => {});
-        }
-
-        // Мгновенная отмена поиска при закрытии или сворачивании вкладки / Telegram
-        async function handlePageExitCleanup() {
-            if (state.isSearchingOnline) {
-                state.isSearchingOnline = false;
-                clearSearchTimer();
-                if (db && currentUserId) {
-                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
-                }
-            }
-            if (state.roomCode && db && state.playerRole && !state.isGameOver) {
-                try {
-                    await updateDoc(doc(db, 'rooms', state.roomCode), {
-                        status: 'abandoned',
-                        updatedAt: Date.now()
-                    });
-                } catch (e) {}
-            }
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && state.isSearchingOnline) {
-                cancelOnlineMatchmaking(false);
-            }
-        });
-        window.addEventListener('pagehide', handlePageExitCleanup);
-        window.addEventListener('beforeunload', handlePageExitCleanup);
-
-        // ==========================================
-        // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP & СОСТОЯНИЯ
+        // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP & КОНСТАНТ
         // ==========================================
         const tg = window.Telegram?.WebApp;
         if (tg) {
@@ -1140,6 +921,272 @@
             playerHits: 0,
             aiTargetsQueue: []
         };
+
+        // ==========================================
+        // ЕДИНЫЙ РЕЕСТР ТАЙМЕРОВ И ПОДПИСОК (БЕЗ ЗАСТЫВАНИЙ)
+        // ==========================================
+        const transitionTimeouts = new Set();
+        let roomUnsubscribe = null;
+        let matchmakingUnsubscribe = null;
+        let queueMonitorUnsubscribe = null;
+        let searchIntervalId = null;
+
+        function registerTransitionTimeout(fn, delay) {
+            const id = setTimeout(() => {
+                transitionTimeouts.delete(id);
+                fn();
+            }, delay);
+            transitionTimeouts.add(id);
+            return id;
+        }
+
+        function clearTransitionTimeouts() {
+            transitionTimeouts.forEach(id => clearTimeout(id));
+            transitionTimeouts.clear();
+        }
+
+        function clearSetupTimer() {
+            if (state.setupTimerInterval) {
+                clearInterval(state.setupTimerInterval);
+                state.setupTimerInterval = null;
+            }
+        }
+
+        function clearTurnTimer() {
+            if (state.turnTimerInterval) {
+                clearInterval(state.turnTimerInterval);
+                state.turnTimerInterval = null;
+            }
+        }
+
+        function clearSearchTimer() {
+            if (searchIntervalId) {
+                clearInterval(searchIntervalId);
+                searchIntervalId = null;
+            }
+        }
+
+        function clearInputWatchdog() {
+            if (state.inputWatchdogTimeout) {
+                clearTimeout(state.inputWatchdogTimeout);
+                state.inputWatchdogTimeout = null;
+            }
+        }
+
+        function clearAllTimers() {
+            clearTransitionTimeouts();
+            clearSetupTimer();
+            clearTurnTimer();
+            clearSearchTimer();
+            clearInputWatchdog();
+        }
+
+        function cleanupRoomListeners() {
+            if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+            if (matchmakingUnsubscribe) { matchmakingUnsubscribe(); matchmakingUnsubscribe = null; }
+        }
+
+        function resetMatchState() {
+            clearAllTimers();
+            state.isGameOver = false;
+            state.isInputLocked = false;
+            state.isFleetSubmitted = false;
+            state.lastProcessedShotsCount = 0;
+            state.roomData = null;
+        }
+
+        // ==========================================
+        // ПРОФИЛЬ, ЛОКАЛЬНОЕ И ОБЛАЧНОЕ СОХРАНЕНИЕ
+        // ==========================================
+        const LOCAL_PROFILE_KEY = 'seabattle_profile_v2';
+        const LOCAL_UID_KEY = 'seabattle_persistent_uid_v2';
+
+        function resolvePersistentUserId() {
+            const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+            if (tgUser?.id) {
+                return `tg_${tgUser.id}`;
+            }
+            let savedUid = localStorage.getItem(LOCAL_UID_KEY);
+            if (!savedUid) {
+                savedUid = 'web_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36).slice(-4);
+                localStorage.setItem(LOCAL_UID_KEY, savedUid);
+            }
+            return savedUid;
+        }
+
+        function generateStableFriendCode(uid) {
+            let hash = 0;
+            for (let i = 0; i < uid.length; i++) {
+                hash = ((hash << 5) - hash) + uid.charCodeAt(i);
+                hash |= 0;
+            }
+            const num = String(Math.abs(hash) % 9000 + 1000);
+            return `SB-${num}-TG`;
+        }
+
+        function saveLocalFallback() {
+            try {
+                localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify({
+                    level: state.user.level,
+                    xp: state.user.xp,
+                    coins: state.user.coins,
+                    wins: state.user.wins,
+                    code: state.user.code,
+                    friends: state.friends
+                }));
+            } catch (e) {}
+        }
+
+        function loadLocalFallback() {
+            try {
+                const raw = localStorage.getItem(LOCAL_PROFILE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                state.user.level = data.level || 1;
+                state.user.xp = data.xp || 0;
+                state.user.coins = data.coins || 0;
+                state.user.wins = data.wins || 0;
+                if (data.code) state.user.code = data.code;
+                if (Array.isArray(data.friends)) state.friends = data.friends;
+            } catch (e) {}
+        }
+
+        async function savePlayerProgress() {
+            saveLocalFallback();
+            if (!db || !currentUserId) return;
+            try {
+                const rank = getRankByLevel(state.user.level);
+                await setDoc(doc(db, 'captains', currentUserId), {
+                    uid: currentUserId,
+                    name: state.user.name,
+                    code: state.user.code,
+                    level: state.user.level,
+                    xp: state.user.xp,
+                    coins: state.user.coins,
+                    wins: state.user.wins,
+                    rankTitle: `${rank.icon} ${rank.title}`,
+                    friends: state.friends,
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (e) {
+                console.warn('Не удалось синхронизировать прогресс с облаком:', e);
+            }
+        }
+
+        async function loadPlayerProgress() {
+            if (!db || !currentUserId) return;
+            try {
+                const captainRef = doc(db, 'captains', currentUserId);
+                const snap = await getDoc(captainRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    state.user.level = data.level || 1;
+                    state.user.xp = data.xp || 0;
+                    state.user.coins = data.coins || 0;
+                    state.user.wins = data.wins || 0;
+                    if (data.code) state.user.code = data.code;
+                    if (Array.isArray(data.friends)) state.friends = data.friends;
+
+                    saveLocalFallback();
+                    document.getElementById('my-friend-code').textContent = state.user.code;
+                    updateHeaderStats();
+                    renderFriendsLists();
+                }
+                await savePlayerProgress();
+            } catch (e) {
+                console.warn('Ошибка загрузки профиля из Firestore:', e);
+            }
+        }
+
+        function initCloudServices() {
+            if (cloudInitPromise) return cloudInitPromise;
+
+            cloudInitPromise = (async () => {
+                currentUserId = resolvePersistentUserId();
+                state.user.code = generateStableFriendCode(currentUserId);
+                loadLocalFallback();
+
+                document.getElementById('my-friend-code').textContent = state.user.code;
+                updateHeaderStats();
+                renderFriendsLists();
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    await signInAnonymously(auth);
+                    // Удаляем любую зависшую заявку поиска от прошлой сессии
+                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
+
+                    await loadPlayerProgress();
+                    startLiveQueueMonitor();
+
+                    const dot = document.getElementById('cloud-status-dot');
+                    dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                    document.getElementById('online-status-label').textContent = 'В сети';
+                    return true;
+                } catch (err) {
+                    console.warn('Ошибка подключения Firebase:', err);
+                    const dot = document.getElementById('cloud-status-dot');
+                    dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+                    document.getElementById('online-status-label').textContent = 'Не в сети';
+                    return false;
+                }
+            })();
+
+            return cloudInitPromise;
+        }
+
+        async function ensureCloudReady() {
+            await initCloudServices();
+            if (auth && !auth.currentUser) {
+                try { await signInAnonymously(auth); } catch (e) {}
+            }
+            return Boolean(db && currentUserId && (!auth || auth.currentUser));
+        }
+
+        // Мониторинг реальных игроков в очереди (только активные за последние 8 сек)
+        function startLiveQueueMonitor() {
+            if (!db || queueMonitorUnsubscribe) return;
+            const qCol = collection(db, 'matchmaking');
+            queueMonitorUnsubscribe = onSnapshot(qCol, (snap) => {
+                const now = Date.now();
+                const realActive = snap.docs.filter(d => {
+                    const data = d.data();
+                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 8000);
+                });
+                const countEl = document.getElementById('live-queue-count');
+                if (countEl) countEl.textContent = String(realActive.length);
+            }, () => {});
+        }
+
+        // Мгновенная отмена поиска при закрытии или сворачивании вкладки / Telegram
+        async function handlePageExitCleanup() {
+            if (state.isSearchingOnline) {
+                state.isSearchingOnline = false;
+                clearSearchTimer();
+                if (db && currentUserId) {
+                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
+                }
+            }
+            if (state.roomCode && db && state.playerRole && !state.isGameOver) {
+                try {
+                    await updateDoc(doc(db, 'rooms', state.roomCode), {
+                        status: 'abandoned',
+                        updatedAt: Date.now()
+                    });
+                } catch (e) {}
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && state.isSearchingOnline) {
+                cancelOnlineMatchmaking(false);
+            }
+        });
+        window.addEventListener('pagehide', handlePageExitCleanup);
+        window.addEventListener('beforeunload', handlePageExitCleanup);
 
         // ==========================================
         // 2. ПОСТРОЕНИЕ ЖЁСТКИХ МАТРИЦ 10x10 (ОДИН РАЗ)
@@ -1945,9 +1992,17 @@
             startSetupTimer();
         }
 
-        function backToLobby() {
+        async function backToLobby() {
             clearAllTimers();
             cleanupRoomListeners();
+            if (state.roomCode && db && state.playerRole) {
+                try {
+                    await updateDoc(doc(db, 'rooms', state.roomCode), {
+                        status: 'abandoned',
+                        updatedAt: Date.now()
+                    });
+                } catch (e) {}
+            }
             state.roomCode = null;
             state.playerRole = null;
             document.getElementById('screen-setup').classList.add('hidden');
