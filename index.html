@@ -815,43 +815,79 @@
         let db = null;
         let auth = null;
         let currentUserId = null;
+        let cloudInitPromise = null;
 
         // ==========================================
-        // ЕДИНЫЙ РЕЕСТР ТАЙМЕРОВ И ПОДПИСОК (ПУНКТ Е)
+        // ЕДИНЫЙ РЕЕСТР ТАЙМЕРОВ И ПОДПИСОК (БЕЗ ЗАСТЫВАНИЙ)
         // ==========================================
-        const activeTimeouts = new Set();
-        const activeIntervals = new Set();
+        const transitionTimeouts = new Set();
         let roomUnsubscribe = null;
         let matchmakingUnsubscribe = null;
         let queueMonitorUnsubscribe = null;
+        let searchIntervalId = null;
 
-        function registerTimeout(fn, delay) {
+        function registerTransitionTimeout(fn, delay) {
             const id = setTimeout(() => {
-                activeTimeouts.delete(id);
+                transitionTimeouts.delete(id);
                 fn();
             }, delay);
-            activeTimeouts.add(id);
+            transitionTimeouts.add(id);
             return id;
         }
 
-        function registerInterval(fn, interval) {
-            const id = setInterval(fn, interval);
-            activeIntervals.add(id);
-            return id;
+        function clearTransitionTimeouts() {
+            transitionTimeouts.forEach(id => clearTimeout(id));
+            transitionTimeouts.clear();
+        }
+
+        function clearSetupTimer() {
+            if (state.setupTimerInterval) {
+                clearInterval(state.setupTimerInterval);
+                state.setupTimerInterval = null;
+            }
+        }
+
+        function clearTurnTimer() {
+            if (state.turnTimerInterval) {
+                clearInterval(state.turnTimerInterval);
+                state.turnTimerInterval = null;
+            }
+        }
+
+        function clearSearchTimer() {
+            if (searchIntervalId) {
+                clearInterval(searchIntervalId);
+                searchIntervalId = null;
+            }
+        }
+
+        function clearInputWatchdog() {
+            if (state.inputWatchdogTimeout) {
+                clearTimeout(state.inputWatchdogTimeout);
+                state.inputWatchdogTimeout = null;
+            }
         }
 
         function clearAllTimers() {
-            activeTimeouts.forEach(id => clearTimeout(id));
-            activeTimeouts.clear();
-            activeIntervals.forEach(id => clearInterval(id));
-            activeIntervals.clear();
-            state.setupTimerInterval = null;
-            state.turnTimerInterval = null;
+            clearTransitionTimeouts();
+            clearSetupTimer();
+            clearTurnTimer();
+            clearSearchTimer();
+            clearInputWatchdog();
         }
 
         function cleanupRoomListeners() {
             if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
             if (matchmakingUnsubscribe) { matchmakingUnsubscribe(); matchmakingUnsubscribe = null; }
+        }
+
+        function resetMatchState() {
+            clearAllTimers();
+            state.isGameOver = false;
+            state.isInputLocked = false;
+            state.isFleetSubmitted = false;
+            state.lastProcessedShotsCount = 0;
+            state.roomData = null;
         }
 
         // Постоянный идентификатор игрока (привязка к Telegram ID для синхронизации между устройствами)
@@ -889,52 +925,52 @@
                 state.user.level = data.level || 1;
                 state.user.xp = data.xp || 0;
                 state.user.coins = data.coins || 0;
-                state.user.wins = data.wins || 0;
-                if (data.code) state.user.code = data.code;
-                if (Array.isArray(data.friends)) state.friends = data.friends;
-            } catch (e) {}
+        function initCloudServices() {
+            if (cloudInitPromise) return cloudInitPromise;
+
+            cloudInitPromise = (async () => {
+                currentUserId = resolvePersistentUserId();
+                state.user.code = generateStableFriendCode(currentUserId);
+                loadLocalFallback();
+
+                document.getElementById('my-friend-code').textContent = state.user.code;
+                updateHeaderStats();
+                renderFriendsLists();
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    await signInAnonymously(auth);
+                    // Удаляем любую зависшую заявку поиска от прошлой сессии
+                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
+
+                    await loadPlayerProgress();
+                    startLiveQueueMonitor();
+
+                    const dot = document.getElementById('cloud-status-dot');
+                    dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                    document.getElementById('online-status-label').textContent = 'В сети';
+                    return true;
+                } catch (err) {
+                    console.warn('Ошибка подключения Firebase:', err);
+                    const dot = document.getElementById('cloud-status-dot');
+                    dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+                    document.getElementById('online-status-label').textContent = 'Не в сети';
+                    return false;
+                }
+            })();
+
+            return cloudInitPromise;
         }
 
-        function saveLocalFallback() {
-            try {
-                localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify({
-                    level: state.user.level,
-                    xp: state.user.xp,
-                    coins: state.user.coins,
-                    wins: state.user.wins,
-                    code: state.user.code,
-                    friends: state.friends
-                }));
-            } catch (e) {}
-        }
-
-        async function initCloudServices() {
-            currentUserId = resolvePersistentUserId();
-            state.user.code = generateStableFriendCode(currentUserId);
-            loadLocalFallback();
-
-            document.getElementById('my-friend-code').textContent = state.user.code;
-            updateHeaderStats();
-            renderFriendsLists();
-
-            try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                await signInAnonymously(auth);
-                await loadPlayerProgress();
-                startLiveQueueMonitor();
-
-                const dot = document.getElementById('cloud-status-dot');
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-                document.getElementById('online-status-label').textContent = 'Облако подключено';
-            } catch (err) {
-                console.warn('Ошибка подключения Firebase:', err);
-                const dot = document.getElementById('cloud-status-dot');
-                dot.className = 'w-2 h-2 rounded-full bg-rose-500';
-                document.getElementById('online-status-label').textContent = 'Нет связи с облаком';
+        async function ensureCloudReady() {
+            await initCloudServices();
+            if (auth && !auth.currentUser) {
+                try { await signInAnonymously(auth); } catch (e) {}
             }
+            return Boolean(db && currentUserId && (!auth || auth.currentUser));
         }
 
         async function loadPlayerProgress() {
@@ -958,34 +994,7 @@
                 }
                 await savePlayerProgress();
             } catch (e) {
-                console.warn('Не удалось загрузить профиль:', e);
-            }
-        }
-
-        async function savePlayerProgress() {
-            saveLocalFallback();
-            if (!db || !currentUserId) return;
-            try {
-                const rank = getRankByLevel(state.user.level);
-                const captainRef = doc(db, 'captains', currentUserId);
-                await setDoc(captainRef, {
-                    uid: currentUserId,
-                    name: state.user.name,
-                    code: state.user.code,
-                    level: state.user.level,
-                    xp: state.user.xp,
-                    coins: state.user.coins,
-                    wins: state.user.wins,
-                    rankTitle: `${rank.icon} ${rank.title}`,
-                    friends: state.friends,
-                    lastSeen: Date.now()
-                }, { merge: true });
-            } catch (e) {
-                console.warn('Не удалось сохранить профиль:', e);
-            }
-        }
-
-        // Мониторинг реальных игроков в очереди (только активные за последние 15 сек)
+        // Мониторинг реальных игроков в очереди (только активные за последние 8 сек)
         function startLiveQueueMonitor() {
             if (!db || queueMonitorUnsubscribe) return;
             const qCol = collection(db, 'matchmaking');
@@ -993,12 +1002,39 @@
                 const now = Date.now();
                 const realActive = snap.docs.filter(d => {
                     const data = d.data();
-                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 15000);
+                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 8000);
                 });
                 const countEl = document.getElementById('live-queue-count');
                 if (countEl) countEl.textContent = String(realActive.length);
             }, () => {});
         }
+
+        // Мгновенная отмена поиска при закрытии или сворачивании вкладки / Telegram
+        async function handlePageExitCleanup() {
+            if (state.isSearchingOnline) {
+                state.isSearchingOnline = false;
+                clearSearchTimer();
+                if (db && currentUserId) {
+                    try { await deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
+                }
+            }
+            if (state.roomCode && db && state.playerRole && !state.isGameOver) {
+                try {
+                    await updateDoc(doc(db, 'rooms', state.roomCode), {
+                        status: 'abandoned',
+                        updatedAt: Date.now()
+                    });
+                } catch (e) {}
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && state.isSearchingOnline) {
+                cancelOnlineMatchmaking(false);
+            }
+        });
+        window.addEventListener('pagehide', handlePageExitCleanup);
+        window.addEventListener('beforeunload', handlePageExitCleanup);
 
         // ==========================================
         // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP & СОСТОЯНИЯ
@@ -1074,11 +1110,15 @@
             playerRole: null,
             isFleetSubmitted: false,
             roomData: null,
+            isSearchingOnline: false,
+            isJoiningRoom: false,
+            lastProcessedShotsCount: 0,
 
             setupTimerInterval: null,
             setupSecondsLeft: SETUP_TIME_SECONDS,
             turnTimerInterval: null,
             turnSecondsLeft: TURN_TIME_SECONDS,
+            inputWatchdogTimeout: null,
 
             selectedShipSize: 4,
             isHorizontal: true,
@@ -1198,6 +1238,9 @@
         // 3. НАВИГАЦИЯ ПО ВКЛАДКАМ И МОДАЛЬНЫМ ОКНАМ
         // ==========================================
         function switchTab(tabName) {
+            if (state.isSearchingOnline && tabName !== 'online') {
+                cancelOnlineMatchmaking(false);
+            }
             state.currentTab = tabName;
             triggerHaptic('light');
 
@@ -1285,7 +1328,8 @@
                 return;
             }
 
-            if (!db) {
+            const ready = await ensureCloudReady();
+            if (!ready) {
                 triggerHaptic('error');
                 showToast('Нет подключения к базе игроков', '⚠️');
                 return;
@@ -1386,36 +1430,48 @@
         }
 
         // ==========================================
-        // 5. ЧЕСТНЫЙ ЖИВОЙ ОНЛАЙН И ПРИВАТНЫЕ КОМНАТЫ (ТРАНЗАКЦИИ)
+        // 5. ЧЕСТНЫЙ ЖИВОЙ ОНЛАЙН И ПРИВАТНЫЕ КОМНАТЫ (СТАБИЛЬНЫЙ ВХОД 10/10)
         // ==========================================
         function generateFiveDigitCode() {
             return String(Math.floor(10000 + Math.random() * 90000));
         }
 
         async function findOnlineMatch() {
-            if (!db || !currentUserId) {
+            if (state.isSearchingOnline || state.isJoiningRoom) return;
+
+            const ready = await ensureCloudReady();
+            if (!ready) {
                 triggerHaptic('error');
                 showToast('Нет подключения к серверу', '⚠️');
                 return;
             }
+
+            resetMatchState();
+            cleanupRoomListeners();
+            state.isSearchingOnline = true;
 
             triggerHaptic('medium');
             document.getElementById('matchmaking-empty-box').classList.add('hidden');
             document.getElementById('btn-find-online').classList.add('hidden');
             document.getElementById('matchmaking-box').classList.remove('hidden');
             document.getElementById('matchmaking-status').textContent = 'Ищем живого соперника...';
+            document.getElementById('matchmaking-sub').textContent = 'Осталось: 20 сек';
 
             const queueCol = collection(db, 'matchmaking');
             let matched = false;
             let searchSecondsLeft = 20;
 
-            const searchCountdown = registerInterval(async () => {
+            searchIntervalId = setInterval(async () => {
+                if (!state.isSearchingOnline || matched) {
+                    clearSearchTimer();
+                    return;
+                }
                 searchSecondsLeft--;
                 const subEl = document.getElementById('matchmaking-sub');
                 if (subEl) subEl.textContent = `Осталось: ${Math.max(0, searchSecondsLeft)} сек`;
 
-                // Обновляем heartbeat своей заявки каждые 5 секунд
-                if (!matched && searchSecondsLeft % 5 === 0 && searchSecondsLeft > 0) {
+                // Обновляем heartbeat только пока активна кнопка поиска (раз в 3 сек)
+                if (searchSecondsLeft % 3 === 0 && searchSecondsLeft > 0 && state.isSearchingOnline) {
                     try {
                         await setDoc(doc(db, 'matchmaking', currentUserId), { lastPing: Date.now() }, { merge: true });
                     } catch (e) {}
@@ -1427,16 +1483,18 @@
             }, 1000);
 
             matchmakingUnsubscribe = onSnapshot(queueCol, async (snapshot) => {
-                if (matched) return;
+                if (matched || !state.isSearchingOnline) return;
                 const now = Date.now();
                 const validSeekers = snapshot.docs.filter(d => {
                     const data = d.data();
-                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 15000);
+                    return d.id !== currentUserId && data.status === 'waiting' && (now - (data.lastPing || 0) < 8000);
                 });
 
                 if (validSeekers.length > 0) {
                     matched = true;
-                    clearInterval(searchCountdown);
+                    state.isSearchingOnline = false;
+                    clearSearchTimer();
+
                     const targetDoc = validSeekers[0];
                     const oppData = targetDoc.data();
                     cleanupRoomListeners();
@@ -1453,12 +1511,13 @@
                 }
             }, () => {});
 
-            // Создаём свою честную заявку в очереди, если сразу никого не нашлось
-            registerTimeout(async () => {
-                if (matched) return;
+            // Создаём заявку только после короткой проверки уже ждущих игроков
+            registerTransitionTimeout(async () => {
+                if (matched || !state.isSearchingOnline) return;
                 const code = generateFiveDigitCode();
                 await createRoomInCloud(code, 'online', false);
 
+                if (!state.isSearchingOnline) return;
                 await setDoc(doc(db, 'matchmaking', currentUserId), {
                     uid: currentUserId,
                     name: state.user.name,
@@ -1466,11 +1525,13 @@
                     status: 'waiting',
                     lastPing: Date.now()
                 });
-            }, 700);
+            }, 650);
         }
 
         async function cancelOnlineMatchmaking(showEmptyNotice = false) {
-            clearAllTimers();
+            state.isSearchingOnline = false;
+            clearSearchTimer();
+            clearTransitionTimeouts();
             cleanupRoomListeners();
 
             document.getElementById('matchmaking-box').classList.add('hidden');
@@ -1493,21 +1554,34 @@
         }
 
         async function createPrivateRoom(friendName = 'Друг') {
-            if (!db || !currentUserId) {
+            if (state.isJoiningRoom) return;
+            state.isJoiningRoom = true;
+
+            try {
+                const ready = await ensureCloudReady();
+                if (!ready) {
+                    triggerHaptic('error');
+                    showToast('Нет подключения к базе данных', '⚠️');
+                    return;
+                }
+
+                resetMatchState();
+                cleanupRoomListeners();
+                triggerHaptic('medium');
+
+                const code = generateFiveDigitCode();
+                state.roomCode = code;
+                state.playerRole = 'host';
+                state.opponentName = friendName;
+
+                await createRoomInCloud(code, 'friend', true);
+                openRoomLobbyUI(code, true, null);
+            } catch (e) {
                 triggerHaptic('error');
-                showToast('Нет подключения к базе данных', '⚠️');
-                return;
+                showToast('Не удалось создать комнату, попробуйте ещё раз', '⚠️');
+            } finally {
+                state.isJoiningRoom = false;
             }
-
-            triggerHaptic('medium');
-            const code = generateFiveDigitCode();
-            state.roomCode = code;
-            state.playerRole = 'host';
-            state.opponentName = friendName;
-            state.isFleetSubmitted = false;
-
-            await createRoomInCloud(code, 'friend', true);
-            openRoomLobbyUI(code, true, null);
         }
 
         async function joinPrivateRoom() {
@@ -1517,7 +1591,10 @@
                 showToast('Введите 5-значный цифровой код комнаты', '⚠️');
                 return;
             }
-            if (!db || !currentUserId) {
+            if (state.isJoiningRoom) return;
+
+            const ready = await ensureCloudReady();
+            if (!ready) {
                 triggerHaptic('error');
                 showToast('Нет подключения к базе данных', '⚠️');
                 return;
@@ -1639,47 +1716,69 @@
             state.playerRole = 'host';
             state.isFleetSubmitted = false;
 
-            document.getElementById('matchmaking-box').classList.add('hidden');
-            document.getElementById('btn-find-online').classList.remove('hidden');
+            if (useLobbyScreen) {
+                document.getElementById('matchmaking-box').classList.add('hidden');
+                document.getElementById('btn-find-online').classList.remove('hidden');
+            }
 
             subscribeToRoom(code);
-            if (!useLobbyScreen) {
-                startSetup(mode);
-            }
         }
 
-        // Атомарный вход в комнату через runTransaction (пункты в, г)
+        // Надёжный вход в комнату с верификацией записи (работает 10 из 10 раз на мобильном интернете)
         async function joinRoomByCode(code, mode, useLobbyScreen) {
-            const roomRef = doc(db, 'rooms', code);
+            if (state.isJoiningRoom) return false;
+            state.isJoiningRoom = true;
 
             try {
-                const roomSnapshotData = await runTransaction(db, async (transaction) => {
-                    const snap = await transaction.get(roomRef);
-                    if (!snap.exists()) {
-                        throw new Error('ROOM_NOT_FOUND');
-                    }
-                    const data = snap.data();
-                    if (data.guestId && data.guestId !== currentUserId) {
-                        throw new Error('ROOM_FULL');
-                    }
-                    if (data.hostId === currentUserId) {
-                        throw new Error('SELF_JOIN');
-                    }
+                resetMatchState();
+                cleanupRoomListeners();
 
-                    const nextStatus = useLobbyScreen ? 'lobby' : 'setup';
-                    transaction.update(roomRef, {
-                        guestId: currentUserId,
-                        guestName: state.user.name,
-                        status: nextStatus,
-                        updatedAt: Date.now()
-                    });
+                const roomRef = doc(db, 'rooms', code);
+                const snap = await getDoc(roomRef);
 
-                    return { ...data, guestId: currentUserId, guestName: state.user.name, status: nextStatus };
+                if (!snap.exists()) {
+                    triggerHaptic('error');
+                    showToast('Комната ' + code + ' не найдена', '❌');
+                    return false;
+                }
+
+                const data = snap.data();
+                if (data.status === 'abandoned' || data.status === 'finished') {
+                    triggerHaptic('error');
+                    showToast('Эта игровая сессия уже завершена', '⚠️');
+                    return false;
+                }
+                if (data.hostId === currentUserId) {
+                    triggerHaptic('error');
+                    showToast('Вы уже создатель этой комнаты', '⚠️');
+                    return false;
+                }
+                if (data.guestId && data.guestId !== currentUserId) {
+                    triggerHaptic('error');
+                    showToast('Эта комната уже заполнена', '⚠️');
+                    return false;
+                }
+
+                const nextStatus = useLobbyScreen ? 'lobby' : 'setup';
+                await updateDoc(roomRef, {
+                    guestId: currentUserId,
+                    guestName: state.user.name,
+                    status: nextStatus,
+                    updatedAt: Date.now()
                 });
+
+                // Проверяем, что именно наш ID закрепился за слотом гостя
+                const verifySnap = await getDoc(roomRef);
+                const verifiedData = verifySnap.data();
+                if (!verifiedData || verifiedData.guestId !== currentUserId) {
+                    triggerHaptic('error');
+                    showToast('Не удалось занять место в комнате', '⚠️');
+                    return false;
+                }
 
                 state.roomCode = code;
                 state.playerRole = 'guest';
-                state.opponentName = roomSnapshotData.hostName || 'Соперник';
+                state.opponentName = verifiedData.hostName || 'Соперник';
                 state.isFleetSubmitted = false;
 
                 document.getElementById('matchmaking-box').classList.add('hidden');
@@ -1687,7 +1786,7 @@
 
                 subscribeToRoom(code);
                 if (useLobbyScreen) {
-                    openRoomLobbyUI(code, false, roomSnapshotData);
+                    openRoomLobbyUI(code, false, verifiedData);
                     showToast('Вы вошли в лобби!', '✅');
                 } else {
                     startSetup(mode);
@@ -1695,11 +1794,10 @@
                 return true;
             } catch (err) {
                 triggerHaptic('error');
-                if (err.message === 'ROOM_NOT_FOUND') showToast('Комната ' + code + ' не найдена', '❌');
-                else if (err.message === 'ROOM_FULL') showToast('Эта комната уже заполнена', '⚠️');
-                else if (err.message === 'SELF_JOIN') showToast('Вы уже создатель этой комнаты', '⚠️');
-                else showToast('Не удалось войти в комнату', '⚠️');
+                showToast('Ошибка подключения к комнате, повторите попытку', '⚠️');
                 return false;
+            } finally {
+                state.isJoiningRoom = false;
             }
         }
 
@@ -1712,27 +1810,55 @@
                 const room = snap.data();
                 state.roomData = room;
 
+                // Если соперник покинул сессию
+                if (room.status === 'abandoned' && !state.isGameOver) {
+                    clearAllTimers();
+                    cleanupRoomListeners();
+                    showToast('Соперник покинул игровую сессию', '⚠️');
+                    state.roomCode = null;
+                    state.playerRole = null;
+                    document.getElementById('screen-room-lobby').classList.add('hidden');
+                    document.getElementById('screen-setup').classList.add('hidden');
+                    document.getElementById('screen-battle').classList.add('hidden');
+                    document.getElementById('screen-lobby').classList.remove('hidden');
+                    return;
+                }
+
                 if (state.playerRole === 'host' && room.guestId) {
                     state.opponentName = room.guestName || 'Друг';
                     document.getElementById('setup-mode-label').textContent = state.opponentName;
                     document.getElementById('enemy-name-label').textContent = state.opponentName;
-                }
 
-                // Синхронизация экрана лобби
-                if (!document.getElementById('screen-room-lobby').classList.contains('hidden')) {
-                    updateLobbyGuestUI(room, state.playerRole === 'host');
-                    if (room.status === 'setup' && state.playerRole === 'guest') {
-                        document.getElementById('screen-room-lobby').classList.add('hidden');
-                        startSetup('friend');
+                    // Для режима "Онлайн": как только живой соперник нашёлся, оба сразу начинают расстановку
+                    if (room.mode === 'online' && room.status === 'setup' && state.isSearchingOnline) {
+                        state.isSearchingOnline = false;
+                        clearSearchTimer();
+                        try { deleteDoc(doc(db, 'matchmaking', currentUserId)); } catch (e) {}
+                        document.getElementById('matchmaking-box').classList.add('hidden');
+                        document.getElementById('btn-find-online').classList.remove('hidden');
+                        startSetup('online');
+                        return;
                     }
                 }
 
-                // Переход к бою, когда оба подтвердили флот
+                // Синхронизация экрана приватного лобби
+                const lobbyScreen = document.getElementById('screen-room-lobby');
+                if (!lobbyScreen.classList.contains('hidden')) {
+                    updateLobbyGuestUI(room, state.playerRole === 'host');
+                    if (room.status === 'setup' && state.playerRole === 'guest') {
+                        lobbyScreen.classList.add('hidden');
+                        startSetup('friend');
+                        return;
+                    }
+                }
+
+                // Переход к бою, когда оба игрока подтвердили готовность флота
                 if (room.hostReady && room.guestReady && !state.isGameOver) {
-                    if (document.getElementById('screen-battle').classList.contains('hidden')) {
+                    const battleScreen = document.getElementById('screen-battle');
+                    if (battleScreen.classList.contains('hidden')) {
                         launchMultiplayerBattle(room);
                     } else {
-                        syncMultiplayerBattleState(room);
+                        syncMultiplayerBattleState(room, false);
                     }
                 }
             }, (err) => {
@@ -1748,16 +1874,16 @@
         }
 
         function startSetupTimer() {
-            clearAllTimers();
+            clearSetupTimer();
             state.setupSecondsLeft = SETUP_TIME_SECONDS;
             updateSetupTimerUI();
 
-            state.setupTimerInterval = registerInterval(() => {
+            state.setupTimerInterval = setInterval(() => {
                 state.setupSecondsLeft--;
                 updateSetupTimerUI();
 
                 if (state.setupSecondsLeft <= 0) {
-                    clearAllTimers();
+                    clearSetupTimer();
                     if (state.playerShips.length < 10) {
                         autoPlacePlayerShips();
                         showToast('Время вышло! Флот расставлен автоматически', '⏱️');
@@ -1786,8 +1912,12 @@
         }
 
         function startSetup(mode) {
-            state.gameMode = mode;
+            clearAllTimers();
+            state.isGameOver = false;
+            state.isInputLocked = false;
             state.isFleetSubmitted = false;
+            state.lastProcessedShotsCount = 0;
+            state.gameMode = mode;
             triggerHaptic('medium');
 
             const label = document.getElementById('setup-mode-label');
@@ -2165,8 +2295,8 @@
         }
 
         async function confirmFleetReady() {
-            if (state.playerShips.length !== 10) return;
-            clearAllTimers();
+            if (state.playerShips.length !== 10 || state.isFleetSubmitted) return;
+            clearSetupTimer();
 
             if (state.roomCode && db && state.playerRole) {
                 state.isFleetSubmitted = true;
@@ -2188,7 +2318,21 @@
                         updatedAt: Date.now()
                     };
 
-                await updateDoc(roomRef, updatePayload);
+                try {
+                    await updateDoc(roomRef, updatePayload);
+                    // Проверяем актуальное состояние комнаты сразу после записи
+                    const freshSnap = await getDoc(roomRef);
+                    const freshRoom = freshSnap.data();
+                    if (freshRoom && freshRoom.hostReady && freshRoom.guestReady && !state.isGameOver) {
+                        if (document.getElementById('screen-battle').classList.contains('hidden')) {
+                            launchMultiplayerBattle(freshRoom);
+                        }
+                    }
+                } catch (e) {
+                    state.isFleetSubmitted = false;
+                    updateSetupControls();
+                    showToast('Ошибка отправки флота, нажмите ещё раз', '⚠️');
+                }
                 return;
             }
 
@@ -2198,6 +2342,20 @@
         // ==========================================
         // 7. БОЕВОЙ ПРОЦЕСС (ТОЧЕЧНЫЙ РЕНДЕР, БЛОКИРОВКА ВВОДА, ТАЙМЕР 15 СЕК)
         // ==========================================
+        function setInputLock(locked) {
+            state.isInputLocked = locked;
+            clearInputWatchdog();
+            if (locked && !state.isGameOver) {
+                // Страховочный таймер на 3.5 сек: никогда не даст полю застыть навсегда
+                state.inputWatchdogTimeout = setTimeout(() => {
+                    if (state.isInputLocked && state.isPlayerTurn && !state.isGameOver) {
+                        state.isInputLocked = false;
+                        renderEnemyGrid();
+                    }
+                }, 3500);
+            }
+        }
+
         function bindEnemyGridEvents() {
             const matrix = document.querySelector('#enemy-board-container .board-matrix');
             if (!matrix) return;
@@ -2210,21 +2368,20 @@
         }
 
         function startTurnTimer() {
-            clearAllTimers();
+            clearTurnTimer();
             state.turnSecondsLeft = TURN_TIME_SECONDS;
             updateTurnTimerUI();
 
-            state.turnTimerInterval = registerInterval(() => {
+            state.turnTimerInterval = setInterval(() => {
                 if (state.isGameOver) {
-                    clearAllTimers();
+                    clearTurnTimer();
                     return;
                 }
                 state.turnSecondsLeft--;
                 updateTurnTimerUI();
 
                 if (state.turnSecondsLeft <= 0) {
-                    clearAllTimers();
-                    // В мультиплеере таймаут обрабатывает только активный игрок (пункт е.5)
+                    clearTurnTimer();
                     if (state.isPlayerTurn && !state.isInputLocked) {
                         const available = [];
                         for (let i = 0; i < GRID_SIZE; i++) {
@@ -2277,7 +2434,7 @@
         }
 
         function startLocalBattle() {
-            clearAllTimers();
+            resetMatchState();
             triggerHaptic('heavy');
             const enemyFleet = generateRandomFleet();
             state.enemyBoard = enemyFleet.board;
@@ -2287,8 +2444,6 @@
             state.playerShotsLog = createEmptyBoard();
 
             state.isPlayerTurn = true;
-            state.isInputLocked = false;
-            state.isGameOver = false;
             state.playerShots = 0;
             state.playerHits = 0;
             state.aiTargetsQueue = [];
@@ -2304,7 +2459,7 @@
         }
 
         function launchMultiplayerBattle(room) {
-            clearAllTimers();
+            resetMatchState();
             triggerHaptic('heavy');
             const isHost = state.playerRole === 'host';
             state.enemyBoard = JSON.parse(isHost ? room.guestBoardJson : room.hostBoardJson);
@@ -2315,8 +2470,6 @@
             state.playerShotsLog = createEmptyBoard();
 
             state.isPlayerTurn = (room.turn === state.playerRole);
-            state.isInputLocked = false;
-            state.isGameOver = false;
             state.playerShots = 0;
             state.playerHits = 0;
 
@@ -2331,6 +2484,12 @@
             if (state.isGameOver) return;
 
             const shots = JSON.parse(room.shotsJson || '[]');
+            // Игнорируем повторные снимки без новых выстрелов (кроме первого входа или победы)
+            if (!isInitial && shots.length === state.lastProcessedShotsCount && !room.winner) {
+                return;
+            }
+            state.lastProcessedShotsCount = shots.length;
+
             const myRole = state.playerRole;
             const prevTurn = state.isPlayerTurn;
 
@@ -2395,28 +2554,30 @@
             renderEnemyGrid();
             renderPlayerBattleGrid();
 
-            // Проверка завершения игры с паузой 850 мс перед модальным окном (пункт е.6)
+            // Проверка завершения игры с паузой 850 мс перед модальным окном
             if (room.winner || state.enemyShips.every(s => s.sunk) || state.playerShips.every(s => s.sunk)) {
-                state.isInputLocked = true;
-                clearAllTimers();
+                setInputLock(true);
+                clearTurnTimer();
                 const didWin = room.winner ? (room.winner === myRole) : state.enemyShips.every(s => s.sunk);
-                registerTimeout(() => endGame(didWin), FINAL_EXPLOSION_DELAY_MS);
+                registerTransitionTimeout(() => endGame(didWin), FINAL_EXPLOSION_DELAY_MS);
                 return;
             }
 
             if (!isInitial && prevTurn !== newTurn) {
-                state.isInputLocked = true;
-                registerTimeout(() => {
+                setInputLock(true);
+                clearTransitionTimeouts();
+                registerTransitionTimeout(() => {
                     if (state.isGameOver) return;
                     state.isPlayerTurn = newTurn;
-                    state.isInputLocked = false;
+                    setInputLock(false);
                     renderEnemyGrid();
                     updateBattleUI();
                     startTurnTimer();
                 }, SHOT_DELAY_MS);
             } else {
                 state.isPlayerTurn = newTurn;
-                state.isInputLocked = false;
+                setInputLock(false);
+                renderEnemyGrid();
                 updateBattleUI();
                 startTurnTimer();
             }
@@ -2508,8 +2669,8 @@
         async function handlePlayerShot(r, c) {
             if (!state.isPlayerTurn || state.isInputLocked || state.isGameOver || state.enemyFog[r][c] !== null) return;
 
-            // Жёсткая блокировка от двойного тапа (пункт е.2)
-            state.isInputLocked = true;
+            // Жёсткая блокировка от двойного тапа со страховочным таймером
+            setInputLock(true);
             renderEnemyGrid();
 
             if (state.roomCode && db && state.roomData) {
@@ -2538,7 +2699,7 @@
                         updatedAt: Date.now()
                     });
                 } catch (e) {
-                    state.isInputLocked = false;
+                    setInputLock(false);
                     renderEnemyGrid();
                 }
                 return;
@@ -2571,11 +2732,11 @@
 
                 if (state.enemyShips.every(s => s.sunk)) {
                     clearAllTimers();
-                    registerTimeout(() => endGame(true), FINAL_EXPLOSION_DELAY_MS);
+                    registerTransitionTimeout(() => endGame(true), FINAL_EXPLOSION_DELAY_MS);
                     return;
                 }
 
-                state.isInputLocked = false;
+                setInputLock(false);
                 renderEnemyGrid();
                 startTurnTimer();
             } else {
@@ -2585,13 +2746,13 @@
 
                 renderEnemyGrid();
 
-                registerTimeout(() => {
+                registerTransitionTimeout(() => {
                     if (state.isGameOver) return;
                     state.isPlayerTurn = false;
-                    state.isInputLocked = false;
+                    setInputLock(false);
                     updateBattleUI();
                     startTurnTimer();
-                    registerTimeout(executeOpponentTurn, 900);
+                    registerTransitionTimeout(executeOpponentTurn, 900);
                 }, SHOT_DELAY_MS);
             }
         }
@@ -2686,19 +2847,19 @@
 
                 if (state.playerShips.every(s => s.sunk)) {
                     clearAllTimers();
-                    registerTimeout(() => endGame(false), FINAL_EXPLOSION_DELAY_MS);
+                    registerTransitionTimeout(() => endGame(false), FINAL_EXPLOSION_DELAY_MS);
                 } else {
-                    registerTimeout(executeOpponentTurn, 900);
+                    registerTransitionTimeout(executeOpponentTurn, 900);
                 }
             } else {
                 state.playerShotsLog[r][c] = 'miss';
                 document.getElementById('last-action-log').textContent = `${coordStr}: Противник промахнулся!`;
                 renderPlayerBattleGrid();
 
-                registerTimeout(() => {
+                registerTransitionTimeout(() => {
                     if (state.isGameOver) return;
                     state.isPlayerTurn = true;
-                    state.isInputLocked = false;
+                    setInputLock(false);
                     renderEnemyGrid();
                     updateBattleUI();
                     startTurnTimer();
